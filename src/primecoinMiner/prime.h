@@ -230,12 +230,16 @@ public:
 class CSieveOfEratosthenes
 {
     unsigned int nSieveSize; // size of the sieve
+	unsigned int nAllocatedSieveSize;
     unsigned int nBits; // target of the prime chain to search for
     mpz_class mpzHash; // hash of the block header
     mpz_class mpzFixedMultiplier; // fixed round multiplier
 
     // final set of candidates for probable primality checking
     unsigned long *vfCandidates;
+    unsigned long *vfCandidateBiTwin;
+    unsigned long *vfCandidateCunningham1;
+
     
     static const unsigned int nWordBits = 8 * sizeof(unsigned long);
     unsigned int nCandidatesWords;
@@ -305,6 +309,7 @@ public:
     CSieveOfEratosthenes(unsigned int nSieveSize, unsigned int nBits, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
     {
         this->nSieveSize = nSieveSize;
+		this->nAllocatedSieveSize = nSieveSize;
         this->nBits = nBits;
         this->mpzHash = mpzHash;
         this->mpzFixedMultiplier = mpzFixedMultiplier;
@@ -315,7 +320,11 @@ public:
         nCandidatesWords = (nSieveSize + nWordBits - 1) / nWordBits;
         nCandidatesBytes = nCandidatesWords * sizeof(unsigned long);
         vfCandidates = (unsigned long *)malloc(nCandidatesBytes);
+        vfCandidateBiTwin = (unsigned long *)malloc(nCandidatesBytes);
+        vfCandidateCunningham1 = (unsigned long *)malloc(nCandidatesBytes);
         memset(vfCandidates, 0, nCandidatesBytes);
+        memset(vfCandidateBiTwin, 0, nCandidatesBytes);
+        memset(vfCandidateCunningham1, 0, nCandidatesBytes);
 		nSievePercentage = 16;
 		this->nChainLength = TargetGetLength(nBits);
 		this->nHalfChainLength = (nChainLength + 1) / 2;
@@ -324,7 +333,44 @@ public:
     ~CSieveOfEratosthenes()
     {
         free(vfCandidates);
+		free(vfCandidateBiTwin);
+		free(vfCandidateCunningham1);
     }
+
+
+    void Init(unsigned int nSieveSize, unsigned int nBits, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier, unsigned int nSiPercentage)
+    {
+        this->nSieveSize = nSieveSize;
+        this->nBits = nBits;
+        this->mpzHash = mpzHash;
+        this->mpzFixedMultiplier = mpzFixedMultiplier;
+        //this->pindexPrev = pindexPrev;
+        nPrimeSeq = 0;
+        nCandidateCount = 0;
+        nCandidateMultiplier = 0;
+        nCandidatesWords = (nSieveSize + nWordBits - 1) / nWordBits;
+        nCandidatesBytes = nCandidatesWords * sizeof(unsigned long);
+		if (nSieveSize > nAllocatedSieveSize)
+		{
+			free(vfCandidates);
+			free(vfCandidateBiTwin);
+			free(vfCandidateCunningham1);
+			vfCandidates = (unsigned long *)malloc(nCandidatesBytes);
+			vfCandidateBiTwin = (unsigned long *)malloc(nCandidatesBytes);
+			vfCandidateCunningham1 = (unsigned long *)malloc(nCandidatesBytes);
+			memset(vfCandidates, 0, nCandidatesBytes);
+			memset(vfCandidateBiTwin, 0, nCandidatesBytes);
+			memset(vfCandidateCunningham1, 0, nCandidatesBytes);
+			nAllocatedSieveSize = nSieveSize;
+		}
+        //memset(vfCandidates, 0, nCandidatesBytes);
+        //memset(vfCandidateBiTwin, 0, nCandidatesBytes);
+        //memset(vfCandidateCunningham1, 0, nCandidatesBytes);
+		this->nSievePercentage = nSiPercentage;
+		this->nChainLength = TargetGetLength(nBits);
+		this->nHalfChainLength = (nChainLength + 1) / 2;
+    }
+
 
     // Get total number of candidates for power test
     unsigned int GetCandidateCount()
@@ -357,7 +403,7 @@ public:
     // Return values:
     //   True - found next candidate; nVariableMultiplier has the candidate
     //   False - scan complete, no more candidate and reset scan
-    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier)
+    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nCandidateType)
     {
         unsigned long lBits = vfCandidates[GetWordNum(nCandidateMultiplier)];
         for(;;)
@@ -381,6 +427,12 @@ public:
             if (lBits & GetBitMask(nCandidateMultiplier))
             {
                 nVariableMultiplier = nCandidateMultiplier;
+				if (vfCandidateBiTwin[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
+                    nCandidateType = PRIME_CHAIN_BI_TWIN;
+                else if (vfCandidateCunningham1[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
+                    nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
+                else
+                    nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
                 return true;
             }
         }

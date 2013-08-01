@@ -127,14 +127,14 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		//printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
-		if (MineProbablePrimeChain(&psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier))
-		{
-			// do nothing here, share is already submitted in MineProbablePrimeChain()
-			//primecoinBlock->nonce += 0x00010000;
-			primecoinBlock->nonce++;
-			nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-			//break;
-		}
+		MineProbablePrimeChain(&psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
+		//{
+		//	// do nothing here, share is already submitted in MineProbablePrimeChain()
+		//	//primecoinBlock->nonce += 0x00010000;
+		//	primecoinBlock->nonce++;
+		//	nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
+		//	//break;
+		//}
 		//psieve = NULL;
 		nRoundTests += nTests;
 		nRoundPrimesHit += nPrimesHit;
@@ -145,9 +145,14 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		}
 
 
-		primecoinBlock->nonce++;
-		primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
+		primecoinBlock->nonce ++;
+		//primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
 		loopCount++;
+	}
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
 	}
 	
 }

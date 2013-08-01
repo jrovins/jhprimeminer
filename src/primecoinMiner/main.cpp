@@ -279,7 +279,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
 			xptClient_foundShare(workData.xptClient, xptShareToSubmit);
 		else
 		{
-			printf("Share submission failed. The client is not connected to the pool.");
+			printf("Share submission failed. The client is not connected to the pool.\n");
 		}
 
 	}
@@ -507,9 +507,9 @@ void jhMiner_printHelp()
 	puts("   -t <num>                      The number of threads for mining (default 1)");
 	puts("                                     For most efficient mining, set to number of CPU cores");
 	puts("   -s <num>                      Set MaxSieveSize range from 200000 - 10000000");
-	puts("                                     Default is 1000000.");
+	puts("                                     Default is 1500000.");
 	puts("   -d <num>                      Set SievePercentage - range from 1 - 100");
-	puts("                                     Default is 8 and it's not recommended to use lower values.");
+	puts("                                     Default is 15 and it's not recommended to use lower values than 8.");
 	puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
 	puts("   -primes <num>                 Sets how many prime factors are used to filter the sieve");
 	puts("                                     Default is MaxSieveSize. Valid range: 300 - 200000000");
@@ -737,6 +737,7 @@ int jhMiner_main_xptMode()
 	sint32 loopCounter = 0;
 	uint32 xptWorkIdentifier = 0xFFFFFFFF;
 	uint32 time_multiAdjust = GetTickCount();
+	//uint32 time_AvarageCalc = GetTickCount();
 
 	while( true )
 	{
@@ -751,18 +752,20 @@ int jhMiner_main_xptMode()
 			//primeStats.primeChainsFound = 0;
 			uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
 			primeStats.bestPrimeChainDifficulty = 0;
-			double primeDifficulty = (double)bestDifficulty / (double)0x1000000;
+			float primeDifficulty = GetChainDifficulty(bestDifficulty);
 			if( workData.workEntry[0].dataIsValid )
 			{
 				primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
-				double sharesPerHour = ((double)valid_shares / statsPassedTime) * 3600000.0;
-				double fourChPerHour = ((double)primeStats.fourChainCount / statsPassedTime) * 3600000.0;
-				double fiveChPerHour = ((double)primeStats.fiveChainCount / statsPassedTime) * 3600000.0;
-				double sixChPerHour = ((double)primeStats.sixChainCount / statsPassedTime) * 3600000.0;
-				double sevenChPerHour = ((double)primeStats.sevenChainCount / statsPassedTime) * 3600000.0;
+				//double sharesPerHour = ((double)valid_shares / statsPassedTime) * 3600000.0;
 				float shareValuePerHour = primeStats.fShareValue / statsPassedTime * 3600000.0;
-				printf("SPH: %.02f - Val/h %.04f - 4ch/h: %.f - 5ch/h: %.f - 6ch/h: %.02f - 7ch/h: %.02f - PPS: %d\n", 
-					sharesPerHour, shareValuePerHour, fourChPerHour, fiveChPerHour, sixChPerHour, sevenChPerHour, (sint32)primesPerSecond);
+				printf("Val/h %.03f - PPS: %d", shareValuePerHour, (sint32)primesPerSecond);
+
+				for(int i=4; i<=7; i++)
+				{
+					printf(" - %dch/h: %.02f", i, ((double)primeStats.chainCounter[i] / statsPassedTime) * 3600000.0); 
+				}
+				//printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
+				printf("\n");
 			}
 		}
 		// wait and check some stats
@@ -773,11 +776,16 @@ int jhMiner_main_xptMode()
 			uint32 passedTime = tickCount - time_updateWork;
 
 
-			if (tickCount - time_multiAdjust >= 10000)
+			if (tickCount - time_multiAdjust >= 60000)
 			{
 				MultiplierAutoAdjust();
 				time_multiAdjust = GetTickCount();
 			}
+
+			//if(tickCount - time_AvarageCalc >= 5*60*1000)
+			//{
+			//	//calculate 5 minute avarages
+			//}
 
 			if( passedTime >= 4000 )
 				break;
@@ -829,17 +837,22 @@ int jhMiner_main_xptMode()
 				}
 				if (workData.xptClient->blockWorkInfo.height > 0)
 				{
+					double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
 					double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
 					double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
+					printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 					printf("---- New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-					printf("---- Total/Valid shares: [ %d / %d ]\n",valid_shares, total_shares);
-					printf("---- 6CH count: %u - 7CH count: %u - Max diff: %.005f\n", primeStats.sixChainCount, primeStats.sevenChainCount, (float)primeStats.bestPrimeChainDifficultySinceLaunch); 
-					printf("---- Adjusted PrimorialMultiplier: %u\n", primeStats.nPrimorialMultiplier);
+					printf("---- Total/Valid shares: [ %d / %d ]  -  Max diff: %.05f\n",valid_shares, total_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
+					for (int i = 6; i <= 9; i++)
+					{
+						double sharePerHour = ((double)primeStats.chainCounter[i] / statsPassedTime) * 3600000.0;
+						printf("---- %d-chain count: %u  -  %dch/h: %.03f - Share Value: %00.03f\n", 
+							i, primeStats.chainCounter[i], i, sharePerHour, (double)primeStats.chainCounter[i] * GetValueOfShareMajor(i));
+					}
+					printf("---- Share Value for the last block: %.06f\n", primeStats.fBlockShareValue);
 					printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-					//printf("CH1: %u - CH2: %u - CHBiTwin: %u\n", 	primeStats.cunningham1Count, primeStats.cunningham2Count, primeStats.cunninghamBiTwinCount);
-					//primeStats.cunningham1Count = 0;
-					//primeStats.cunningham2Count = 0;
-					//primeStats.cunninghamBiTwinCount = 0;
+					primeStats.fBlockShareValue = 0;
+
 				}
 			}
 			Sleep(10);
@@ -858,8 +871,8 @@ int main(int argc, char **argv)
 	GetSystemInfo( &sysinfo );
 	commandlineInput.numThreads = sysinfo.dwNumberOfProcessors;
 	commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
-	commandlineInput.sieveSize = 1000000; // default maxSieveSize
-	commandlineInput.sievePercentage = 8; // default 
+	commandlineInput.sieveSize = 1500000; // default maxSieveSize
+	commandlineInput.sievePercentage = 15; // default 
 	commandlineInput.sievePrimeLimit = 0;
 	// parse command lines
 	jhMiner_parseCommandline(argc, argv);
@@ -877,7 +890,7 @@ int main(int argc, char **argv)
 	
 	printf("\n");
 	printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-	printf("\xBA  jhPrimeMiner - mod by hg5fm (mumus)	                        \xBA\n");
+	printf("\xBA  jhPrimeMiner - mod by hg5fm (mumus) -v5 (8/02/2013)          \xBA\n");
 	printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
 	printf("\xBA  contributors: x3maniac                                       \xBA\n");
 	printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
@@ -892,6 +905,7 @@ int main(int argc, char **argv)
 		pctx = BN_CTX_new();
 	// init prime table
 	GeneratePrimeTable(commandlineInput.sievePrimeLimit);
+	printf("Sieve Percentage: %u %%\n", nSievePercentage);
 	// init winsock
 	WSADATA wsa;
 	WSAStartup(MAKEWORD(2,2),&wsa);
@@ -935,15 +949,11 @@ int main(int argc, char **argv)
 	primeStats.shareRejected = false;
 	primeStats.primeChainsFound = 0;
 	primeStats.foundShareCount = 0;
-	primeStats.fourChainCount = 0;
-	primeStats.fiveChainCount = 0;
-	primeStats.sixChainCount = 0;
-	primeStats.sevenChainCount = 0;
+	for(int i = 0; i < sizeof(primeStats.chainCounter)/sizeof(uint32);  i++)
+		primeStats.chainCounter[i] = 0;
 	primeStats.fShareValue = 0;
-	primeStats.cunningham1Count = 0;
-	primeStats.cunningham2Count = 0;
-	primeStats.cunninghamBiTwinCount = 0;
-	primeStats.nPrimorialMultiplier = 71;
+	primeStats.fBlockShareValue = 0;
+	primeStats.nPrimorialMultiplier = 61;
 
 	// setup thread count and print info
 	printf("Using %d threads\n", commandlineInput.numThreads);
@@ -1014,7 +1024,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("\nSPH = 'Share per Hour', PPS = 'Primes per Second', Val/h = 'Share Value per Hour'\n\n");
+	printf("\nPPS = 'Primes per Second', Val/h = 'Share Value per Hour'");
 
 	// enter different mainloops depending on protocol mode
 	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
