@@ -144,6 +144,11 @@ typedef struct
 	volatile float fShareValue;
 	volatile float fBlockShareValue;
 	volatile uint32 chainCounter[12];
+	volatile uint32 nWaveTime;
+	volatile unsigned int nWaveRound;
+	volatile uint32 nTestTime;
+	volatile unsigned int nTestRound;
+
 	volatile float nChainHit;
 	volatile float nPrevChainHit;
 	volatile unsigned int nPrimorialMultiplier;
@@ -155,8 +160,10 @@ typedef struct
 	volatile uint32 bestPrimeChainDifficulty;
 	volatile double bestPrimeChainDifficultySinceLaunch;
 	uint32 primeLastUpdate;
+	uint32 startTime;
 	bool shareFound;
 	bool shareRejected;
+	volatile unsigned int nL1CacheElements;
 
 }primeStats_t;
 

@@ -363,9 +363,9 @@ public:
 			memset(vfCandidateCunningham1, 0, nCandidatesBytes);
 			nAllocatedSieveSize = nSieveSize;
 		}
-        //memset(vfCandidates, 0, nCandidatesBytes);
-        //memset(vfCandidateBiTwin, 0, nCandidatesBytes);
-        //memset(vfCandidateCunningham1, 0, nCandidatesBytes);
+        memset(vfCandidates, 0, nCandidatesBytes);
+        memset(vfCandidateBiTwin, 0, nCandidatesBytes);
+        memset(vfCandidateCunningham1, 0, nCandidatesBytes);
 		this->nSievePercentage = nSiPercentage;
 		this->nChainLength = TargetGetLength(nBits);
 		this->nHalfChainLength = (nChainLength + 1) / 2;

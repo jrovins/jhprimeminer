@@ -769,6 +769,7 @@ bool ProbablePrimeChainTest(const mpz_class& bnPrimeChainOrigin, unsigned int nB
 //   false - prime chain too short (none of nChainLength meeting target)
 static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPrimalityTestParams& testParams)
 {
+	DWORD start = GetTickCount();
     const unsigned int nBits = testParams.nBits;
     const unsigned int nCandidateType = testParams.nCandidateType;
     unsigned int& nChainLength = testParams.nChainLength;
@@ -797,18 +798,19 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
         {
             mpzOriginPlusOne = mpzPrimeChainOrigin + 1;
             ProbableCunninghamChainTestFast(mpzOriginPlusOne, false, false, nChainLengthCunningham2, testParams);
-	// verify if there is any chance to find a biTwin that worth calculation
-	if (nChainLengthCunningham1 < 0x2000000 || nChainLengthCunningham2 < 0x2000000)
-		return (nChainLengthCunningham1 >= nBits || nChainLengthCunningham2 >= nBits);
 
-    // Figure out BiTwin Chain length
-    // BiTwin Chain allows a single prime at the end for odd length chain
+		// Figure out BiTwin Chain length
+		// BiTwin Chain allows a single prime at the end for odd length chain
             nChainLength =
         (TargetGetLength(nChainLengthCunningham1) > TargetGetLength(nChainLengthCunningham2))?
             (nChainLengthCunningham2 + TargetFromInt(TargetGetLength(nChainLengthCunningham2)+1)) :
             (nChainLengthCunningham1 + TargetFromInt(TargetGetLength(nChainLengthCunningham1)));
         }
     }
+
+	uint32 end = GetTickCount(); 
+	primeStats.nTestTime += end-start;
+	primeStats.nTestRound ++;
 
     return (nChainLength >= nBits);
 }
@@ -903,7 +905,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 	
 	std::set<mpz_class> * multiplierSet = new std::set<mpz_class>();
 	bool bFullScan = false;
-	while ( (nTests < 1200 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
+	while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
 	{
 		nTests++;
 		if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nCandidateType))
@@ -932,7 +934,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
 		primeStats.primeChainsFound++;
 
-		if( nProbableChainLength >= 0x01000000 )
+		if( nProbableChainLength >= 0x03000000 )
 		{
 			shareDifficultyMajor = (sint32)(nChainLength>>24);
 		}
@@ -1477,7 +1479,7 @@ void CSieveOfEratosthenes::AddMultiplier(unsigned int *vMultipliers, const unsig
 bool CSieveOfEratosthenes::Weave()
 {
     // Faster GMP version
- 
+	uint32 start = GetTickCount(); 
     // Keep all variables local for max performance
     const unsigned int nChainLength = this->nChainLength;
     const unsigned int nDoubleChainLength = this->nChainLength * 2;
@@ -1594,7 +1596,7 @@ bool CSieveOfEratosthenes::Weave()
     }
 
     // Number of elements that are likely to fit in L1 cache
-    const unsigned int nL1CacheElements = 200000;
+	const unsigned int nL1CacheElements = primeStats.nL1CacheElements;
     const unsigned int nArrayRounds = (nSieveSize + nL1CacheElements - 1) / nL1CacheElements;
 
     // Loop over each array one at a time for optimal L1 cache performance
@@ -1652,6 +1654,9 @@ bool CSieveOfEratosthenes::Weave()
     free(vCunningham2AMultipliers);
     free(vCunningham2BMultipliers);
 
+	uint32 end = GetTickCount(); 
+	primeStats.nWaveTime += end-start;
+	primeStats.nWaveRound ++;
     return false;
 }
 
