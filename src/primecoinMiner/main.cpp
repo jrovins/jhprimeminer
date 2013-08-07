@@ -749,9 +749,9 @@ void MultiplierAutoAdjust()
 
 BYTE nRoundSievePercentage = 75;
 bool bOptimalL1Search = true;
-bool bEnablenPrimorialMultiplierTunning = true;
+bool bEnablenPrimorialMultiplierTuning = true;
 
-int AutoTunningWorkerThread(bool bEnabled)
+int AutoTuningWorkerThread(bool bEnabled)
 {
 
 	DWORD startTime = GetTickCount();
@@ -803,7 +803,7 @@ int AutoTunningWorkerThread(bool bEnabled)
 				bOptimalL1Search = false;
 				break;
 			}			
-			printf("Auto tunning in progress: %u %%\n", ((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart));
+			printf("Auto Tuning in progress: %u %%\n", ((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart));
 		}
 		
 		float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
@@ -813,7 +813,7 @@ int AutoTunningWorkerThread(bool bEnabled)
 		if (bEnabled)
 			nCounter ++;
 	}
-	// Auto tunning for nPrimorialMultiplier
+	// Auto Tuning for nPrimorialMultiplier
 	nSampleSeconds = 3;
 	
 	while (true)
@@ -833,8 +833,8 @@ int AutoTunningWorkerThread(bool bEnabled)
 		//printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
 		//printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 		
-		if (!bEnablenPrimorialMultiplierTunning)
-			continue; // Auto tunning is disabled
+		if (!bEnablenPrimorialMultiplierTuning)
+			continue; // Auto Tuning is disabled
 
 
 		if (ratio > nRoundSievePercentage + 5)
@@ -879,8 +879,8 @@ static void input_thread()
 			printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
 			break;
 		case 'p': case 'P':
-			bEnablenPrimorialMultiplierTunning = !bEnablenPrimorialMultiplierTunning;
-			printf("Primorial Multiplier Auto Tunning was %s.\n", bEnablenPrimorialMultiplierTunning ? "Enabled": "Disabled");
+			bEnablenPrimorialMultiplierTuning = !bEnablenPrimorialMultiplierTuning;
+			printf("Primorial Multiplier Auto Tuning was %s.\n", bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled");
 			break;
 		case 's': case 'S':
 			break;
@@ -937,8 +937,8 @@ static void input_thread()
  */
 int jhMiner_main_xptMode()
 {
-	// start the Auto Tunning thread
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)AutoTunningWorkerThread, (LPVOID)true, 0, 0);
+	// start the Auto Tuning thread
+	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)AutoTuningWorkerThread, (LPVOID)true, 0, 0);
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
 
 	// start threads
@@ -1063,7 +1063,7 @@ int jhMiner_main_xptMode()
 					printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 					printf("---- New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
 					printf("---- Total/Valid shares: [ %d / %d ]  -  Max diff: %.05f\n",valid_shares, total_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
-					for (int i = 6; i <= 9; i++)
+					for (int i = 6; i <= 10; i++)
 					{
 						double sharePerHour = ((double)primeStats.chainCounter[i] / totalRunTime) * 3600000.0;
 						printf("---- %d-chain count: %u  -  %dch/h: %.03f - Share Value: %00.03f\n", 
@@ -1258,12 +1258,12 @@ int main(int argc, char **argv)
 	printf("   <Down arrow key>  - Decrement Sieve Percentage\n");
 	printf("   <Left arrow key>  - Decrement Round Sieve Percentage\n");
 	printf("   <Right arrow key> - Increment Round Sieve Percentage\n");
-	printf("   <P> - Enable/Disable Round Sieve Percentage Auto Tunning\n");
+	printf("   <P> - Enable/Disable Round Sieve Percentage Auto Tuning\n");
 	printf("   <[> - Decrement Primorial Multiplier\n");
 	printf("   <]> - Increment Primorial Multiplier\n");
 	printf("   <-> - Decrement Sive size\n");
 	printf("   <+> - Increment Sieve size\n");
-	printf("Note: While the initial auto tunning is in progress several values cannot be changed.\n");
+	printf("Note: While the initial auto tuning is in progress several values cannot be changed.\n");
 
 
 	// enter different mainloops depending on protocol mode
