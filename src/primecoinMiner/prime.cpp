@@ -814,7 +814,6 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 
     return (nChainLength >= nBits);
 }
-// auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
 
 //// Sieve for mining
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;

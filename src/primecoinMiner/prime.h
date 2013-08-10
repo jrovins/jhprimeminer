@@ -29,6 +29,7 @@ static const mpz_class mpzPrimeMin = (mpzOne << 255);
 
 extern unsigned int nTargetInitialLength;
 extern unsigned int nTargetMinLength;
+extern DWORD * threadHearthBeat;
 
 // Generate small prime table
 void GeneratePrimeTable(unsigned int nSieveSize);
@@ -239,9 +240,9 @@ class CSieveOfEratosthenes
     unsigned long *vfCandidates;
     unsigned long *vfCandidateBiTwin;
     unsigned long *vfCandidateCunningham1;
-
+	
     
-    static const unsigned int nWordBits = 8 * sizeof(unsigned long);
+    static const unsigned int nWordBits = 8 * sizeof(unsigned long);	
     unsigned int nCandidatesWords;
     unsigned int nCandidatesBytes;
 
