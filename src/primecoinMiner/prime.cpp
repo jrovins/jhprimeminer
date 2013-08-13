@@ -901,8 +901,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 	bool multipleShare = false;
 	bool sieveRescan = false;
 	mpz_class mpzPrevPrimeChainMultiplier = 0;
-	
-	std::set<mpz_class> * multiplierSet = new std::set<mpz_class>();
+		
 	bool bFullScan = false;
 	while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
 	{
@@ -961,7 +960,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 		{
 			block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier;
 			
-			if (multipleShare && multiplierSet->find(block->mpzPrimeChainMultiplier) != multiplierSet->end())
+			if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
 				continue;
 			
 			if (sieveRescan)
@@ -1004,7 +1003,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
 			// submit this share
 			jhMiner_pushShare_primecoin(blockRawData, block);
-			multiplierSet->insert(block->mpzPrimeChainMultiplier);
+			multiplierSet.insert(block->mpzPrimeChainMultiplier);
 			primeStats.foundShareCount ++;
 			primeStats.fShareValue += shareValue;
 			primeStats.fBlockShareValue += shareValue;

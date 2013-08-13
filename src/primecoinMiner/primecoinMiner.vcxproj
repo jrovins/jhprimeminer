@@ -242,7 +242,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalOptions>/arch:AVX %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/arch:AVX /favor:blend %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>lib\openssl64\libeay32MT.lib;lib\openssl64\ssleay32MT.lib;lib\mpir\mpirxx.lib;lib\mpir\mpir.lib;%(AdditionalDependencies)</AdditionalDependencies>

@@ -5,6 +5,7 @@
 
 #include<stdio.h>
 #include<time.h>
+#include<set>
 
 #include"sha256.h"
 #include"ripemd160.h"
@@ -143,6 +144,7 @@ typedef struct
 	volatile uint32 foundShareCount;
 	volatile float fShareValue;
 	volatile float fBlockShareValue;
+	volatile float fTotalSubmittedShareValue;
 	volatile uint32 chainCounter[12];
 	volatile uint32 nWaveTime;
 	volatile unsigned int nWaveRound;
@@ -152,6 +154,7 @@ typedef struct
 	volatile float nChainHit;
 	volatile float nPrevChainHit;
 	volatile unsigned int nPrimorialMultiplier;
+	
 	CRITICAL_SECTION cs;
 
 	// since we can generate many (useless) primes ultra fast if we simply set sieve size low, 
@@ -196,11 +199,13 @@ void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 h
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
-void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
+bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
 
 // direct access to share counters
 extern volatile int total_shares;
 extern volatile int valid_shares;
+extern std::set<mpz_class> multiplierSet;
+extern bool appQuitSignal;
 
 extern __declspec( thread ) BN_CTX* pctx;
 #ifndef ARRAY_SIZE

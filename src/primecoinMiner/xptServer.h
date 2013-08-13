@@ -102,6 +102,7 @@ void xptPacketbuffer_changeSizeLimit(xptPacketbuffer_t* pb, uint32 sizeLimit);
 
 void xptPacketbuffer_beginReadPacket(xptPacketbuffer_t* pb);
 uint32 xptPacketbuffer_getReadSize(xptPacketbuffer_t* pb);
+float xptPacketbuffer_readFloat(xptPacketbuffer_t* pb, bool* error);
 uint32 xptPacketbuffer_readU32(xptPacketbuffer_t* pb, bool* error);
 uint16 xptPacketbuffer_readU16(xptPacketbuffer_t* pb, bool* error);
 uint8 xptPacketbuffer_readU8(xptPacketbuffer_t* pb, bool* error);
