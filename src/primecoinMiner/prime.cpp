@@ -848,6 +848,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 		(*psieve)->Weave();
 	}
 
+   primeStats.nSieveRounds++;
+   primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
 
 	mpz_class mpzHashMultiplier = mpzHash * mpzFixedMultiplier;
 	mpz_class mpzChainOrigin;
