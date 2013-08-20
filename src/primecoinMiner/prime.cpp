@@ -908,7 +908,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 	bool bFullScan = false;
 
    uint32 start = GetTickCount();
-	while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
+   //while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
+   while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
 	{
 		nTests++;
 		if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nCandidateType))
@@ -949,18 +950,18 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 			
 		if (shareDifficultyMajor >= 3)
 		{				
-			if (!sieveRescan)
-			{				
+         //if (!sieveRescan)
+         //{				
             primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
             primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
             if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
 					primeStats.nChainHit++;
-			}
+         //}
 			// do a 100% rescan of the sieve for higer shares
-			if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
-			{
-				bFullScan = true;
-			}
+         //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
+         //{
+         //	bFullScan = true;
+         //}
 		}
 		//if( nProbableChainLength > 0x03000000 )
 		//	primeStats.qualityPrimesFound++;
@@ -974,12 +975,12 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 			if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
 				continue;
 			
-			if (sieveRescan)
-         {
-				// count the chains also on rescan
-            primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-            primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         }
+			//if (sieveRescan)
+         //{
+		//		// count the chains also on rescan
+        //    primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+        //    primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+        // }
 
 			// update server data
 			block->serverData.client_shareBits = nProbableChainLength;
