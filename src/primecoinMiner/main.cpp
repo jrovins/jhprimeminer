@@ -1108,15 +1108,15 @@ int jhMiner_main_xptMode()
 	sint32 loopCounter = 0;
 	uint32 xptWorkIdentifier = 0xFFFFFFFF;
 	uint32 time_multiAdjust = GetTickCount();
-	unsigned long lastFiveChainCount = 0;
-	unsigned long lastFourChainCount = 0;
+   //unsigned long lastFiveChainCount = 0;
+   //unsigned long lastFourChainCount = 0;
 	while( true )
 	{
 		if (appQuitSignal)
 			return 0;
 
-		// calculate stats every second tick
-		if( loopCounter&1 )
+      // calculate stats every ~30 seconds
+      if( loopCounter % 10 == 0 )
 		{
 			double totalRunTime = (double)(GetTickCount() - primeStats.startTime);
 			double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
@@ -1125,26 +1125,44 @@ int jhMiner_main_xptMode()
 			double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
 			primeStats.primeLastUpdate = GetTickCount();
 			primeStats.primeChainsFound = 0;
+         float avgCandidatesPerRound = (double)primeStats.nCandidateCount / primeStats.nSieveRounds;
+         float sievesPerSecond = (double)primeStats.nSieveRounds / (statsPassedTime / 1000.0);
+         primeStats.primeLastUpdate = GetTickCount();
+         primeStats.nCandidateCount = 0;
+         primeStats.nSieveRounds = 0;
+         primeStats.primeChainsFound = 0;
 			uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
 			primeStats.bestPrimeChainDifficulty = 0;
 			float primeDifficulty = GetChainDifficulty(bestDifficulty);
 			if( workData.workEntry[0].dataIsValid )
 			{
+            statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
+            if( statsPassedTime < 1.0 )
+               statsPassedTime = 1.0; // avoid division by zero
 				primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
 				//double sharesPerHour = ((double)valid_shares / totalRunTime) * 3600000.0;
 				float shareValuePerHour = primeStats.fShareValue / totalRunTime * 3600000.0;
-				float fiveSharePerPeriod = ((double)(primeStats.chainCounter[5] - lastFiveChainCount) / statsPassedTime) * 3600000.0;
-				float fourSharePerPeriod = ((double)(primeStats.chainCounter[4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
-				lastFiveChainCount = primeStats.chainCounter[5];
-				lastFourChainCount = primeStats.chainCounter[4];
-				printf("Val/h %.03f - PPS: %d", shareValuePerHour, (sint32)primesPerSecond);
-				for(int i=4; i<7; i++)
+            //float fiveSharePerPeriod = ((double)(primeStats.chainCounter[0][5] - lastFiveChainCount) / statsPassedTime) * 3600000.0;
+            //float fourSharePerPeriod = ((double)(primeStats.chainCounter[0][4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
+            //lastFiveChainCount = primeStats.chainCounter[0][5];
+            //lastFourChainCount = primeStats.chainCounter[0][4];
+            printf("\nVal/h:%8f - PPS:%d - SPS:%.03f - ACC:%d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
+            printf(" Chain/Hr: ");
+
+            for(int i=4; i<=8; i++)
 				{
-					printf(" - %dch/h: %.02f", i, ((double)primeStats.chainCounter[i] / totalRunTime) * 3600000.0); 
+               printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
 				}
-				printf(" - Last 4ch/h: %.02f - Last 5ch/h: %.02f\n", fourSharePerPeriod, fiveSharePerPeriod);
+            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 9)
+            {
+               printf("\n           ");
+               for(int i=9; i<=12; i++)
+               {
+                  printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
+               }
+            }
+            printf("\n\n");
 				//printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
-				//printf("\n");
 			}
 		}
 		// wait and check some stats
@@ -1218,21 +1236,30 @@ int jhMiner_main_xptMode()
 				{
 					double totalRunTime = (double)(GetTickCount() - primeStats.startTime);
 					double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
+               if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
 					double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
 					double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
-					printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-					printf("---- New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-					printf("---- Total/Valid shares: [ %d / %d ]  -  Max diff: %.05f\n",valid_shares, total_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
-					for (int i = 6; i <= 10; i++)
-					{
-						double sharePerHour = ((double)primeStats.chainCounter[i] / totalRunTime) * 3600000.0;
-						printf("---- %2d-chain count: %4u - %2dch/h: %7.03f - Share Value: %00.03f\n", 
-							i, primeStats.chainCounter[i], i, sharePerHour, (double)primeStats.chainCounter[i] * GetValueOfShareMajor(i));
-					}
-					//printf("---- Share Value for the last block: %.06f\n", primeStats.fBlockShareValue);
-					printf("---- Total Share Value submitted to the pool: %.06f\n", primeStats.fTotalSubmittedShareValue);
+               printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+               printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
+               printf("Total/Valid shares: [ %d / %d ]  -  Max diff: %.06f\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
+               statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
+               if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
+               for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
+               {
+                  double sharePerHour = ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0;
+                  printf("%2dch/h: %8.02f - %u [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
+                     i, sharePerHour, 
+                     primeStats.chainCounter[0][i],
+                     primeStats.chainCounter[1][i],
+                     primeStats.chainCounter[2][i],
+                     primeStats.chainCounter[3][i]//, 
+                     //(double)primeStats.chainCounter[0][i] * GetValueOfShareMajor(i)
+                     );
+               }
+               printf("Share Value submitted - Last Block/Total: %0.6f / %0.6f\n", primeStats.fBlockShareValue, primeStats.fTotalSubmittedShareValue);
+               printf("Current Primorial Value: %u\n", primeStats.nPrimorialMultiplier);
+               printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 
-					printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 					primeStats.fBlockShareValue = 0;
 						multiplierSet.clear();
 				}
@@ -1292,11 +1319,17 @@ int main(int argc, char **argv)
 	
 	printf("\n");
 	printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-	printf("\xBA  jhPrimeMiner - mod by hg5fm (mumus) -v7.1 (8/13/2013)        \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3beta                     \xBA\n");
+   printf("\xBA     optimised from hg5fm (mumus) v7.1 build.                  \xBA\n");
 	printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
 	printf("\xBA  contributors: x3maniac                                       \xBA\n");
 	printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
 	printf("\xBA  Credits: mikaelh for the performance optimizations           \xBA\n");
+   printf("\xBA                                                               \xBA\n");
+   printf("\xBA  Donations:                                                   \xBA\n");
+   printf("\xBA        XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv                \xBA\n");
+   printf("\xBA        LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE                \xBA\n");
+   printf("\xBA        BTC: 1Fph7y622HJ5Cwq4bkzfeZXWep2Jyi5kp7                \xBA\n");
 	printf("\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\n");
 	printf("Launching miner...\n");
 	// set priority lower so the user still can do other things
@@ -1346,14 +1379,18 @@ int main(int argc, char **argv)
 	//lastBlockCount = queryLocalPrimecoindBlockCount(useLocalPrimecoindForLongpoll);
 
 	// init stats
-	primeStats.primeLastUpdate = GetTickCount();
-	primeStats.startTime = GetTickCount();
+   primeStats.primeLastUpdate = primeStats.blockStartTime = primeStats.startTime = GetTickCount();
 	primeStats.shareFound = false;
 	primeStats.shareRejected = false;
 	primeStats.primeChainsFound = 0;
 	primeStats.foundShareCount = 0;
-	for(int i = 0; i < sizeof(primeStats.chainCounter)/sizeof(uint32);  i++)
-		primeStats.chainCounter[i] = 0;
+   for(int i = 0; i < sizeof(primeStats.chainCounter[0])/sizeof(uint32);  i++)
+   {
+      primeStats.chainCounter[0][i] = 0;
+      primeStats.chainCounter[1][i] = 0;
+      primeStats.chainCounter[2][i] = 0;
+      primeStats.chainCounter[3][i] = 0;
+   }
 	primeStats.fShareValue = 0;
 	primeStats.fBlockShareValue = 0;
 	primeStats.fTotalSubmittedShareValue = 0;
@@ -1431,7 +1468,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("\nPPS = 'Primes per Second', Val/h = 'Share Value per Hour'\n");
+   printf("\nVal/h = 'Share Value per Hour', PPS = 'Primes per Second', \n");
+   printf("SPS = 'Sieves per Second', ACC = 'Avg. Candidate Count / Sieve' \n");
+   printf("===============================================================\n");
 	printf("Keyboard shortcuts:\n");
 	printf("   <Ctrl-C>, <Q>     - Quit\n");
 	printf("   <Up arrow key>    - Increment Sieve Percentage\n");

@@ -145,7 +145,7 @@ typedef struct
 	volatile float fShareValue;
 	volatile float fBlockShareValue;
 	volatile float fTotalSubmittedShareValue;
-	volatile uint32 chainCounter[12];
+	volatile uint32 chainCounter[4][13];
 	volatile uint32 nWaveTime;
 	volatile unsigned int nWaveRound;
 	volatile uint32 nTestTime;
@@ -155,6 +155,9 @@ typedef struct
 	volatile float nPrevChainHit;
 	volatile unsigned int nPrimorialMultiplier;
 	
+   volatile float nSieveRounds;
+   volatile float nCandidateCount;
+
 	CRITICAL_SECTION cs;
 
 	// since we can generate many (useless) primes ultra fast if we simply set sieve size low, 
@@ -163,6 +166,7 @@ typedef struct
 	volatile uint32 bestPrimeChainDifficulty;
 	volatile double bestPrimeChainDifficultySinceLaunch;
 	uint32 primeLastUpdate;
+	uint32 blockStartTime;
 	uint32 startTime;
 	bool shareFound;
 	bool shareRejected;

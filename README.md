@@ -3,14 +3,14 @@ jhPrimeminer
 
 jhPrimeminer is a optimized pool miner for primecoin.
 
-Added the most important optimizations from mikaelh https://bitcointalk.org/index.php?topic=255782
+This is an optimised build of Mumus v7.1 release.
 
-Added even more optimizations for the algorithm and autoadjustment for PrimorialMultiplier based on share value calculation
-
-Statistics now contains Share Value information
+Statistics now less spammy and include SPS (Sieves Per Second) 
+and ACC (Average Candidate Count)
 
 If you found this helpfull you can support my work.
 
-BTC:  1MfptENPMaXtm8QnJP7kP5oAhxwywtfnxn
-LTC:   LL9zLcxUSof7ypNyxqpByFyxhX1jQ6r1DX
-XMP:  AcBv2PMkffgKDxi8rgHPkf9eAFFnZkSn2p
+XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv
+LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE
+BTC: 1Fph7y622HJ5Cwq4bkzfeZXWep2Jyi5kp7
+	

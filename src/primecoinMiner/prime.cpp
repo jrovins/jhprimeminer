@@ -941,7 +941,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 		{				
 			if (!sieveRescan)
 			{				
-				primeStats.chainCounter[shareDifficultyMajor]++;
+            primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+            primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
 				if (shareDifficultyMajor == 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
 					primeStats.nChainHit++;
 			}
@@ -964,7 +965,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 				continue;
 			
 			if (sieveRescan)
-				primeStats.chainCounter[shareDifficultyMajor]++;  // count the chains also on rescan
+         {
+				// count the chains also on rescan
+            primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+            primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+         }
 
 			// update server data
 			block->serverData.client_shareBits = nProbableChainLength;
@@ -995,10 +1000,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 			float shareValue = GetValueOfShareMajor( shareDifficultyMajor);
 			float shareDiff = GetChainDifficulty(nProbableChainLength);
 
-			printf("%s - SHARE FOUND !!! (Th#: %u) ---  DIFF: %f - VAL: %.3f", sNow, threadIndex, shareDiff, shareValue);
-			if(shareDifficultyMajor >= 6)
-				printf("    >%u\n", shareDifficultyMajor);
-			else
+         printf("%s SHARE FOUND! (Th#:%2u) DIFF:%8f VAL:%8f TYPE:%u", sNow, threadIndex, shareDiff, shareValue, nCandidateType);
+
 				printf("\n");
 
 			// submit this share
