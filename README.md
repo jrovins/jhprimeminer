@@ -5,6 +5,7 @@ jhPrimeminer is a optimized pool miner for primecoin.
 
 This is an optimised build of Mumus v7.1 release.
 
+Several sieve updates / amendments to boost speed / functionality.
 Statistics now less spammy and include SPS (Sieves Per Second) 
 and ACC (Average Candidate Count)
 
