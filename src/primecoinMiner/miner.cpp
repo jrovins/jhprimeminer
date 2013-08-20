@@ -33,7 +33,8 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	//primecoinBlock->nonce = 0;
 	//TODO: check this if it makes sense
-	primecoinBlock->nonce = 0x00010000 * threadIndex;
+	primecoinBlock->nonce = 0x01000000 * threadIndex;
+   const unsigned long maxNonce = (0x01000000 * threadIndex) | 0x00FF0000;
 	//primecoinBlock->nonce = 0;
 
 	uint32 nTime = GetTickCount() + 1000*600;
@@ -50,27 +51,30 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	time_t unixTimeStart;
 	time(&unixTimeStart);
-	uint32 nTimeRollStart = primecoinBlock->timestamp;
-
-	uint32 nCurrentTick = GetTickCount();
+	uint32 nTimeRollStart = primecoinBlock->timestamp - 5;
+   uint32 nLastRollTime = GetTickCount();
+	uint32 nCurrentTick = nLastRollTime;
 	while( nCurrentTick < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
 	{
 		nCurrentTick = GetTickCount();
-		//if( primecoinBlock->xptMode )
-		//{
-		//	// when using x.pushthrough, roll time
-		//	time_t unixTimeCurrent;
-		//	time(&unixTimeCurrent);
-		//	uint32 timeDif = unixTimeCurrent - unixTimeStart;
-		//	uint32 newTimestamp = nTimeRollStart + timeDif;
-		//	if( newTimestamp != primecoinBlock->timestamp )
-		//	{
-		//		primecoinBlock->timestamp = newTimestamp;
+      // Roll Time stamp every 10 secs.
+		if ((primecoinBlock->xptMode) && (nCurrentTick < nLastRollTime || (nLastRollTime - nCurrentTick >= 10000)))
+		{
+			// when using x.pushthrough, roll time
+			time_t unixTimeCurrent;
+			time(&unixTimeCurrent);
+			uint32 timeDif = unixTimeCurrent - unixTimeStart;
+			uint32 newTimestamp = nTimeRollStart + timeDif;
+			if( newTimestamp != primecoinBlock->timestamp )
+			{
+				primecoinBlock->timestamp = newTimestamp;
+         	primecoinBlock->nonce = 0x01000000 * threadIndex;
 		//		primecoinBlock->nonce = 0;
-		//		//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
+				//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
 		//		nPrimorialMultiplier = nPrimorialMultiplierStart;
-		//	}
-		//}
+			}
+         nLastRollTime = nCurrentTick;
+		}
 
 		primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
 		//
@@ -83,14 +87,14 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
         mpz_class mpzHash;
         mpz_set_uint256(mpzHash.get_mpz_t(), phash);
         
-		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < 0xffff0000) {
+		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < maxNonce) {
 			primecoinBlock->nonce++;
 			primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
             phash = primecoinBlock->blockHeaderHash;
             mpz_set_uint256(mpzHash.get_mpz_t(), phash);
 		}
 		//printf("Use nonce %d\n", primecoinBlock->nonce);
-		if (primecoinBlock->nonce >= 0xffff0000)
+		if (primecoinBlock->nonce >= maxNonce)
 		{
 			printf("Nonce overflow\n");
 			break;
@@ -148,13 +152,13 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		nRoundPrimesHit += nPrimesHit;
 		nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
 		// added this
-		if (fNewBlock)
-		{
-		}
+		//if (fNewBlock)
+		//{
+		//}
 
 
 		primecoinBlock->nonce ++;
-		primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
+		//primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
 		loopCount++;
 	}
 	if( psieve )
