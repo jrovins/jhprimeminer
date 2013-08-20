@@ -11,6 +11,9 @@ volatile int total_shares = 0;
 volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
 unsigned int nSievePercentage;
+bool nPrintDebugMessages;
+unsigned long nOverrideTargetValue;
+unsigned int nOverrideBTTargetValue;
 char* dt;
 
 bool error(const char *format, ...)
@@ -487,6 +490,10 @@ typedef struct
 	unsigned int L1CacheElements;
 	unsigned int primorialMultiplier;
 	bool enableCacheTunning;
+   sint32 targetOverride;
+   sint32 targetBTOverride;
+   sint32 initialPrimorial;
+   bool printDebug;
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -681,10 +688,10 @@ void jhMiner_parseCommandline(int argc, char **argv)
 		}
 		else if( memcmp(argument, "-tune", 6)==0 )
 		{
-			// -primes
+         // -tune
 			if( cIdx >= argc )
 			{
-				printf("Missing flag after -primes option\n");
+            printf("Missing flag after -tune option\n");
 				ExitProcess(0);
 			}
 			if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
@@ -692,6 +699,66 @@ void jhMiner_parseCommandline(int argc, char **argv)
 
 			cIdx++;
 		}
+      else if( memcmp(argument, "-target", 7)==0 )
+      {
+         // -target
+         if( cIdx >= argc )
+         {
+            printf("Missing number after -target option\n");
+            ExitProcess(0);
+         }
+         commandlineInput.targetOverride = atoi(argv[cIdx]);
+         if( commandlineInput.targetOverride < 0 || commandlineInput.targetOverride > 100 )
+         {
+            printf("-target parameter out of range, must be between 0 - 100");
+            ExitProcess(0);
+         }
+         cIdx++;
+      }
+      else if( memcmp(argument, "-bttarget", 9)==0 )
+      {
+         // -bttarget
+         if( cIdx >= argc )
+         {
+            printf("Missing number after -bttarget option\n");
+            ExitProcess(0);
+         }
+         commandlineInput.targetBTOverride = atoi(argv[cIdx]);
+         if( commandlineInput.targetBTOverride < 0 || commandlineInput.targetBTOverride > 100 )
+         {
+            printf("-bttarget parameter out of range, must be between 0 - 100");
+            ExitProcess(0);
+         }
+         cIdx++;
+      }
+      else if( memcmp(argument, "-primorial", 10)==0 )
+      {
+         // -primorial
+         if( cIdx >= argc )
+         {
+            printf("Missing number after -primorial option\n");
+            ExitProcess(0);
+         }
+         commandlineInput.initialPrimorial = atoi(argv[cIdx]);
+         if( commandlineInput.initialPrimorial < 11 || commandlineInput.initialPrimorial > 1000 )
+         {
+            printf("-primorial parameter out of range, must be between 11 - 1000");
+            ExitProcess(0);
+         }
+         cIdx++;
+      }
+      else if( memcmp(argument, "-debug", 6)==0 )
+      {
+         // -debug
+         if( cIdx >= argc )
+         {
+            printf("Missing flag after -debug option\n");
+            ExitProcess(0);
+         }
+         if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
+            commandlineInput.printDebug = true;
+         cIdx++;
+      }
 		else if( memcmp(argument, "-help", 6)==0 || memcmp(argument, "--help", 7)==0 )
 		{
 			jhMiner_printHelp();
@@ -1286,6 +1353,10 @@ int main(int argc, char **argv)
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
+   commandlineInput.targetOverride = 0;
+   commandlineInput.targetBTOverride = 0;
+   commandlineInput.initialPrimorial = 61;
+   commandlineInput.printDebug = 0;
 	
 	commandlineInput.sievePrimeLimit = 0;
 	// parse command lines
@@ -1294,6 +1365,8 @@ int main(int argc, char **argv)
 	nMaxSieveSize = commandlineInput.sieveSize;
 	nSievePercentage = commandlineInput.sievePercentage;
 	nRoundSievePercentage = commandlineInput.roundSievePercentage;
+   nOverrideTargetValue = commandlineInput.targetOverride;
+   nOverrideBTTargetValue = commandlineInput.targetBTOverride;
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
 	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
@@ -1394,7 +1467,7 @@ int main(int argc, char **argv)
 	primeStats.fShareValue = 0;
 	primeStats.fBlockShareValue = 0;
 	primeStats.fTotalSubmittedShareValue = 0;
-	primeStats.nPrimorialMultiplier = 61;
+   primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
 	primeStats.nWaveTime = 0;
 	primeStats.nWaveRound = 0;
 	//primeStats.nL1CacheElements = 256000;
