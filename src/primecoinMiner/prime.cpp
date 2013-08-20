@@ -302,6 +302,7 @@ static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nL
     mpz_t& mpzE = testParams.mpzE;
     mpz_t& mpzR = testParams.mpzR;
 
+   /*
     if (fFastDiv)
     {
         // Fast divisibility tests
@@ -320,6 +321,7 @@ static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nL
             }
         }
     }
+   */
 
     mpz_sub_ui(mpzE, n.get_mpz_t(), 1);
     mpz_powm(mpzR, mpzTwo.get_mpz_t(), mpzE, n.get_mpz_t());
@@ -769,7 +771,6 @@ bool ProbablePrimeChainTest(const mpz_class& bnPrimeChainOrigin, unsigned int nB
 //   false - prime chain too short (none of nChainLength meeting target)
 static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPrimalityTestParams& testParams)
 {
-	DWORD start = GetTickCount();
     const unsigned int nBits = testParams.nBits;
     const unsigned int nCandidateType = testParams.nCandidateType;
     unsigned int& nChainLength = testParams.nChainLength;
@@ -808,8 +809,6 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
         }
     }
 
-	uint32 end = GetTickCount(); 
-	primeStats.nTestTime += end-start;
 	primeStats.nTestRound ++;
 
     return (nChainLength >= nBits);
@@ -902,7 +901,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 	bool sieveRescan = false;
 	mpz_class mpzPrevPrimeChainMultiplier = 0;
 		
+   bool rtnValue = false;
+
 	bool bFullScan = false;
+
+   uint32 start = GetTickCount();
 	while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
 	{
 		nTests++;
@@ -920,13 +923,14 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 			{
 				// power tests completed for the sieve
 				fNewBlock = true; // notify caller to change nonce
-				return false;
+            rtnValue = false;
+            break;
 			}
 		}
 				
 		mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier;		
 		nChainLength = 0;		
-		bool canSubmitAsShare = ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
+      ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
 		nProbableChainLength = nChainLength;
 		sint32 shareDifficultyMajor = 0;
 
@@ -936,6 +940,10 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 		{
 			shareDifficultyMajor = (sint32)(nChainLength>>24);
 		}
+      else
+      {
+         continue;
+      }
 			
 		if (shareDifficultyMajor >= 3)
 		{				
@@ -943,7 +951,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 			{				
             primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
             primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-				if (shareDifficultyMajor == 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
+            if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
 					primeStats.nChainHit++;
 			}
 			// do a 100% rescan of the sieve for higer shares
@@ -1005,13 +1013,13 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 				printf("\n");
 
 			// submit this share
-			jhMiner_pushShare_primecoin(blockRawData, block);
 			multiplierSet.insert(block->mpzPrimeChainMultiplier);
+         multipleShare = true;
+         jhMiner_pushShare_primecoin(blockRawData, block);
 			primeStats.foundShareCount ++;
 			primeStats.fShareValue += shareValue;
 			primeStats.fBlockShareValue += shareValue;
 			RtlZeroMemory(blockRawData, 256);
-			multipleShare = true;
 		}
 		//if(TargetGetLength(nProbableChainLength) >= 1)
 		//	nPrimesHit++;
@@ -1022,8 +1030,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 	//	delete *psieve;
 	//	*psieve = NULL;
 	//}
-
-	return false; // stop as timed out
+   uint32 end = GetTickCount(); 
+   primeStats.nTestTime += end-start;
+   return rtnValue; // stop as timed out
 }
 
 
