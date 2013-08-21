@@ -838,6 +838,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       lSieveTarget = nOverrideTargetValue;
    else
       lSieveTarget = TargetGetLength(block->nBits);
+      // If Difficulty gets within 1/30th of next target length, its actually more efficent to
+      // increase the target length.. While technically worse for share val/hr - this should
+      // help block rate.
+      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 1.0f / 30))
+         lSieveTarget++;
 
    if (nOverrideBTTargetValue > 0)
       lSieveBTTarget = nOverrideBTTargetValue;
