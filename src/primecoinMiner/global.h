@@ -72,35 +72,6 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 #define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
 
 
-/*
- * Returns the value of the share in 'share points' 
- */
-static inline double GetValueOfShareMajor(sint32 nShareDifficultyMajor)
-{
-	if( nShareDifficultyMajor >= 11 )
-		return 1000.0;
-	else if( nShareDifficultyMajor == 10 )
-		return 400.0;
-	else if( nShareDifficultyMajor == 9 )
-		return 100.0;
-	else if( nShareDifficultyMajor == 8 )
-		return 10.0;
-	else if( nShareDifficultyMajor == 7 )
-		return 1.0;
-	else if( nShareDifficultyMajor == 6 )
-		return 0.1;
-	else if( nShareDifficultyMajor == 5 )
-		return 0.003;
-        return 0.0; // share invalid
-}
-
-static inline double GetValueOfShare(uint32 nShareBits)
-{
-	sint32 shareDifficultyMajor = (sint32)(nShareBits>>24);
-	return GetValueOfShareMajor( shareDifficultyMajor);
-}
-
-
 static inline float GetChainDifficulty(unsigned int nChainLength)
 {
 	return (float)nChainLength / 16777216.0;

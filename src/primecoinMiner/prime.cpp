@@ -1016,12 +1016,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          struct tm * timeinfo;
          timeinfo = localtime (&now);
          char sNow [80];
-         strftime (sNow, 80, "%x - %X",timeinfo);
+         strftime (sNow, 80, "%x-%X",timeinfo);
 
-         float shareValue = GetValueOfShareMajor( shareDifficultyMajor);
          float shareDiff = GetChainDifficulty(nProbableChainLength);
 
-         printf("%s SHARE FOUND! (Th#:%2u) DIFF:%8f VAL:%8f TYPE:%u", sNow, threadIndex, shareDiff, shareValue, nCandidateType);
+         printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
          if (nPrintDebugMessages)
          {
             printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());
@@ -1035,8 +1034,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          multipleShare = true;
          jhMiner_pushShare_primecoin(blockRawData, block);
          primeStats.foundShareCount ++;
-         primeStats.fShareValue += shareValue;
-         primeStats.fBlockShareValue += shareValue;
          RtlZeroMemory(blockRawData, 256);
       }
       //if(TargetGetLength(nProbableChainLength) >= 1)

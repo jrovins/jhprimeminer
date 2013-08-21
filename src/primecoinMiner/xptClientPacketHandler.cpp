@@ -110,6 +110,8 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 		char* dt = ctime(&now);
 		//printf("Share accepted by server");
 		//printf(" [ %d / %d val: %.6f] %s", valid_shares, total_shares, shareValue, dt);
+      primeStats.fShareValue += shareValue;
+      primeStats.fBlockShareValue += shareValue;
 		primeStats.fTotalSubmittedShareValue += shareValue;
 	}
 	else
