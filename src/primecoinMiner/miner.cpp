@@ -8,7 +8,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
 std::set<mpz_class> multiplierSet;
 
-bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
+void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 {
 	//printf("PrimecoinMiner started\n");
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -51,30 +51,28 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	time_t unixTimeStart;
 	time(&unixTimeStart);
-	uint32 nTimeRollStart = primecoinBlock->timestamp - 5;
-   uint64 nLastRollTime = getTimeMilliseconds();
-	uint64 nCurrentTick = nLastRollTime;
-	while( nCurrentTick < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
-	{
-		nCurrentTick = getTimeMilliseconds();
-      // Roll Time stamp every 10 secs.
-		if ((primecoinBlock->xptMode) && (nCurrentTick < nLastRollTime || (nLastRollTime - nCurrentTick >= 10000)))
-		{
-			// when using x.pushthrough, roll time
-			time_t unixTimeCurrent;
-			time(&unixTimeCurrent);
-			uint32 timeDif = unixTimeCurrent - unixTimeStart;
-			uint32 newTimestamp = nTimeRollStart + timeDif;
-			if( newTimestamp != primecoinBlock->timestamp )
+	uint32 nTimeRollStart = primecoinBlock->timestamp;
+
+	//uint32 nCurrentTick = GetTickCount();
+
+	while( getTimeMilliseconds() < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
 			{
-				primecoinBlock->timestamp = newTimestamp;
-         	primecoinBlock->nonce = 0x01000000 * threadIndex;
+		//nCurrentTick = GetTickCount();
+		//if( primecoinBlock->xptMode )
+		//{
+		//	// when using x.pushthrough, roll time
+		//	time_t unixTimeCurrent;
+		//	time(&unixTimeCurrent);
+		//	uint32 timeDif = unixTimeCurrent - unixTimeStart;
+		//	uint32 newTimestamp = nTimeRollStart + timeDif;
+		//	if( newTimestamp != primecoinBlock->timestamp )
+		//	{
+		//		primecoinBlock->timestamp = newTimestamp;
 		//		primecoinBlock->nonce = 0;
-				//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
+		//		//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
 		//		nPrimorialMultiplier = nPrimorialMultiplierStart;
-			}
-         nLastRollTime = nCurrentTick;
-		}
+		//	}
+		//}
 
 		primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
 		//
@@ -134,14 +132,7 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
 		MineProbablePrimeChain(&psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
-#ifdef _WIN32
-		threadHearthBeat[threadIndex] = getTimeMilliseconds();
-		if (appQuitSignal)
-		{
-			printf( "Shutting down mining thread %d.\n", threadIndex);
-			return false;
-		}
-#endif
+
 		//{
 		//	// do nothing here, share is already submitted in MineProbablePrimeChain()
 		//	//primecoinBlock->nonce += 0x00010000;
@@ -169,5 +160,4 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		psieve = NULL;
 	}
 	
-	return true;
 }

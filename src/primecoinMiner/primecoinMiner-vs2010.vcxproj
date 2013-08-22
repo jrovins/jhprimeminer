@@ -210,6 +210,7 @@
     <ClInclude Include="mpirxx.h" />
     <ClInclude Include="prime.h" />
     <ClInclude Include="bignum2.h" />
+    <ClInclude Include="ticker.h" />
     <ClInclude Include="uint256.h" />
     <ClInclude Include="jhlib\bmp.h" />
     <ClInclude Include="jhlib\customBuffer.h" />

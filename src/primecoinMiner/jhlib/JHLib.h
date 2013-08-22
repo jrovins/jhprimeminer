@@ -9,9 +9,6 @@
 #else
 #include <signal.h>
 #include <stdint.h>
-
-typedef uint8_t BYTE;
-typedef uint32_t DWORD;
 #endif
 #include <cstring> // for memcpy/memset
 #include<math.h>

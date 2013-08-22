@@ -443,5 +443,8 @@
     <ClInclude Include="mpirxx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ticker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

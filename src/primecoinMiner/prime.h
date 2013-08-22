@@ -25,11 +25,11 @@ extern bool nPrintDebugMessages;
 extern unsigned long nOverrideTargetValue;
 extern unsigned int nOverrideBTTargetValue;
 static const uint256 hashBlockHeaderLimit = (uint256(1) << 255);
-static const CBigNum bnOne = 1;
+/*static const CBigNum bnOne = 1;
 static const CBigNum bnTwo = 2;
 static const CBigNum bnConst8 = 8;
 static const CBigNum bnPrimeMax = (bnOne << 2000) - 1;
-static const CBigNum bnPrimeMin = (bnOne << 255);
+static const CBigNum bnPrimeMin = (bnOne << 255);*/
 static const mpz_class mpzOne = 1;
 static const mpz_class mpzTwo = 2;
 static const mpz_class mpzConst8 = 8;
@@ -57,7 +57,7 @@ bool PrimeTableGetNextPrime(unsigned int& p);
 bool PrimeTableGetPreviousPrime(unsigned int& p);
 
 // Compute primorial number p#
-void BNPrimorial(unsigned int p, CBigNum& bnPrimorial);
+//void BNPrimorial(unsigned int p, CBigNum& bnPrimorial);
 void Primorial(unsigned int p, mpz_class& mpzPrimorial);
 unsigned int PrimorialFast(unsigned int p);
 // Compute the first primorial number greater than or equal to bn

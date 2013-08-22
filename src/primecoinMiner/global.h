@@ -24,8 +24,6 @@ typedef uint32_t DWORD;
 #endif
 #include"jhlib/JHLib.h"
 
-#include<string.h>
-
 #include<stdio.h>
 #include<time.h>
 #include<set>
@@ -204,13 +202,12 @@ void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 h
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
-bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
+void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
 
 // direct access to share counters
 extern volatile int total_shares;
 extern volatile int valid_shares;
 extern std::set<mpz_class> multiplierSet;
-extern bool appQuitSignal;
 
 #ifdef _WIN32
 extern __declspec( thread ) BN_CTX* pctx;
