@@ -1,5 +1,5 @@
-#include<Windows.h>
 #include"hashTable.h"
+#include <cstdlib>
 
 #ifndef memMgr_alloc
 #define memMgr_alloc(x,y) malloc(y)
@@ -8,7 +8,7 @@
 
 #define MAXSCAN_LENGTH	32 // maximal number of filled hashentrys in a row
 
-// uint32 tables are growable
+// uint32_t tables are growable
 void hashTable_init(hashTable_t *hashTable, int itemLimit)
 {
 	hashTable->size = itemLimit;
@@ -73,10 +73,10 @@ void hashTable_enlarge(hashTable_t *hashTable)
 
 void _hashTable_updateReference(hashTable_t *hashTable, unsigned int key, int oldReference, int newReference)
 {
-	DWORD hashA = key + key*3 + key*7 + key*11;
+	uint32_t hashA = key + key*3 + key*7 + key*11;
 	// get entry
 	int index = hashA%hashTable->size;
-	for(DWORD i=0; i<hashTable->size; i++) 
+	for(uint32_t i=0; i<hashTable->size; i++) 
 	{
 		int ridx = hashTable->entrys[index].itemIndex;
 		if( ridx == 0 )
@@ -96,7 +96,7 @@ void _hashTable_updateReference(hashTable_t *hashTable, unsigned int key, int ol
 
 bool hashTable_set(hashTable_t *hashTable, unsigned int key, void *item)
 {
-	DWORD hashA = key + key*3 + key*7 + key*11;
+	uint32_t hashA = key + key*3 + key*7 + key*11;
 	// get entry
 	int index = hashA%hashTable->size;
 	for(int i=0; i<MAXSCAN_LENGTH; i++) 
@@ -170,7 +170,7 @@ bool hashTable_set(hashTable_t *hashTable, char *key, void *item)
 
 void *hashTable_get(hashTable_t *hashTable, unsigned int key)
 {
-	DWORD hashA = key + key*3 + key*7 + key*11;
+	uint32_t hashA = key + key*3 + key*7 + key*11;
 	// get entry
 	if( hashTable->size == 0 )
 		return NULL; // hashTable not initialized or empty
@@ -223,3 +223,4 @@ unsigned int hashTable_getCount(hashTable_t *hashTable)
 {
 	return hashTable->count;
 }
+

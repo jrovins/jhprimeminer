@@ -1,4 +1,5 @@
 #include"global.h"
+#include <signal.h>
 
 /*
  * Tries to find the parameter defined by the case-insenitive name.
@@ -170,5 +171,9 @@ void jsonObject_freeObject(jsonObject_t* jsonObject)
 		free(jsonObject);
 	}
 	else
+#ifdef _WIN32
 		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 }

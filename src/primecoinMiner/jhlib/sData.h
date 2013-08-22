@@ -1,3 +1,8 @@
+#ifndef _WIN32
+#include <stdint.h>
+typedef uint32_t DWORD;
+#endif
+	
 typedef struct  
 {
 	char *optionName;

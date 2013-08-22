@@ -21,4 +21,8 @@ typedef struct
 void fastSorter_init(fastSorter_t *f, unsigned int initialLimit, bool autoIncreaseLimit);
 void fastSorter_clear(fastSorter_t *f);
 void fastSorter_add(fastSorter_t *f, signed int value, void *p);
+#ifdef _MSC_VER
 void fastSorter_traverseAscending(fastSorter_t *f, void (__fastcall *cb)(void *p));
+#else
+void fastSorter_traverseAscending(fastSorter_t *f, void *cb(void *p));
+#endif

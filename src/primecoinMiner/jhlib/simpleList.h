@@ -59,3 +59,4 @@ typedef struct _objectCreatorCache_t
 objectCreatorCache_t* objectCreatorCache_create(uint32 objectSize, uint32 initialEntryCount, uint32 stepScale, uint32 stepAdd);
 void* objectCreatorCache_getNext(objectCreatorCache_t* objectCreatorCache);
 void objectCreatorCache_freeAll(objectCreatorCache_t* objectCreatorCache);
+

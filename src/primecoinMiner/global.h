@@ -1,7 +1,30 @@
+#include <algorithm>
+
+#ifdef _WIN32
+#define NOMINMAX
 #pragma comment(lib,"Ws2_32.lib")
 #include<Winsock2.h>
 #include<ws2tcpip.h>
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <signal.h>
+#define Sleep(ms) usleep(1000*ms)
+#include <pthread.h>
+
+typedef uint8_t BYTE;
+typedef uint32_t DWORD;
+#endif
 #include"jhlib/JHLib.h"
+
+#include<string.h>
 
 #include<stdio.h>
 #include<time.h>
@@ -13,7 +36,6 @@
 static const int PROTOCOL_VERSION = 70001;
 
 #include<openssl/bn.h>
-
 
 // our own improved versions of BN functions
 BIGNUM *BN2_mod_inverse(BIGNUM *in,	const BIGNUM *a, const BIGNUM *n, BN_CTX *ctx);
@@ -38,14 +60,18 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 #include"prime.h"
 #include"jsonrpc.h"
 
+#ifdef _WIN32
 #include "mpirxx.h"
 #include "mpir.h"
-#include<stdint.h>
+#else
+#include <gmpxx.h>
+#include <gmp.h>
+#endif
 #include"xptServer.h"
 #include"xptClient.h"
 
-static const int64 COIN = 100000000;
-static const int64 CENT = 1000000;
+static const uint64_t COIN = 100000000;
+static const uint64_t CENT = 1000000;
 
 
 #define	bswap_16(value)  \
@@ -70,35 +96,6 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
 #define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
-
-
-/*
- * Returns the value of the share in 'share points' 
- */
-static inline double GetValueOfShareMajor(sint32 nShareDifficultyMajor)
-{
-	if( nShareDifficultyMajor >= 11 )
-		return 1000.0;
-	else if( nShareDifficultyMajor == 10 )
-		return 400.0;
-	else if( nShareDifficultyMajor == 9 )
-		return 100.0;
-	else if( nShareDifficultyMajor == 8 )
-		return 10.0;
-	else if( nShareDifficultyMajor == 7 )
-		return 1.0;
-	else if( nShareDifficultyMajor == 6 )
-		return 0.1;
-	else if( nShareDifficultyMajor == 5 )
-		return 0.003;
-        return 0.0; // share invalid
-}
-
-static inline double GetValueOfShare(uint32 nShareBits)
-{
-	sint32 shareDifficultyMajor = (sint32)(nShareBits>>24);
-	return GetValueOfShareMajor( shareDifficultyMajor);
-}
 
 
 static inline float GetChainDifficulty(unsigned int nChainLength)
@@ -140,15 +137,15 @@ typedef struct
 
 typedef struct  
 {
-	volatile uint32 primeChainsFound;
-	volatile uint32 foundShareCount;
+	volatile uint32_t primeChainsFound;
+	volatile uint32_t foundShareCount;
 	volatile float fShareValue;
 	volatile float fBlockShareValue;
 	volatile float fTotalSubmittedShareValue;
-	volatile uint32 chainCounter[4][13];
-	volatile uint32 nWaveTime;
+	volatile uint32_t chainCounter[4][13];
+	volatile uint32_t nWaveTime;
 	volatile unsigned int nWaveRound;
-	volatile uint32 nTestTime;
+	volatile uint32_t nTestTime;
 	volatile unsigned int nTestRound;
 
 	volatile float nChainHit;
@@ -158,16 +155,20 @@ typedef struct
    volatile float nSieveRounds;
    volatile float nCandidateCount;
 
-	CRITICAL_SECTION cs;
+#ifdef _WIN32
+   CRITICAL_SECTION cs;
+#else
+  pthread_mutex_t cs;
+#endif
 
 	// since we can generate many (useless) primes ultra fast if we simply set sieve size low, 
 	// its better if we only count primes with at least a given difficulty
 	//volatile uint32 qualityPrimesFound;
 	volatile uint32 bestPrimeChainDifficulty;
 	volatile double bestPrimeChainDifficultySinceLaunch;
-	uint32 primeLastUpdate;
-	uint32 blockStartTime;
-	uint32 startTime;
+  uint64 primeLastUpdate;
+  uint64 startTime;
+uint64 blockStartTime;
 	bool shareFound;
 	bool shareRejected;
 	volatile unsigned int nL1CacheElements;
@@ -186,7 +187,7 @@ typedef struct
 	uint32	nonce;
 	// GetHeaderHash() goes up to this offset (4+32+32+4+4+4=80 bytes)
 	uint256 blockHeaderHash;
-	CBigNum bnPrimeChainMultiplierBN;
+	//CBigNum bnPrimeChainMultiplierBN; unused
 	mpz_class mpzPrimeChainMultiplier;
 	// other
 	serverData_t serverData;
@@ -211,7 +212,12 @@ extern volatile int valid_shares;
 extern std::set<mpz_class> multiplierSet;
 extern bool appQuitSignal;
 
+#ifdef _WIN32
 extern __declspec( thread ) BN_CTX* pctx;
+#else
+extern BN_CTX* pctx;
+#endif
+
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif

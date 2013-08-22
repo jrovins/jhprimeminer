@@ -1,6 +1,8 @@
 #include"global.h"
+#include "ticker.h"
+#include <iostream>
 
-
+#ifdef _WIN32
 SOCKET jsonClient_openConnection(char *IP, int Port)
 {
 	SOCKET s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -10,6 +12,17 @@ SOCKET jsonClient_openConnection(char *IP, int Port)
 	addr.sin_port=htons(Port);
 	addr.sin_addr.s_addr=inet_addr(IP);
 	int result = connect(s,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN));
+#else
+int jsonClient_openConnection(char *IP, int Port)
+{
+  int s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+  sockaddr_in addr;
+  memset(&addr,0,sizeof(sockaddr_in));
+  addr.sin_family=AF_INET;
+  addr.sin_port=htons(Port);
+  addr.sin_addr.s_addr=inet_addr(IP);
+  int result = connect(s,(sockaddr*)&addr,sizeof(sockaddr_in));
+#endif
 	if( result )
 	{
 		return 0;
@@ -115,16 +128,22 @@ unsigned char * base64_decode(const unsigned char *src, size_t len, uint8* out, 
 
 jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, fStr_t* fStr_parameterData, sint32* errorCode)
 {
+  using namespace std;
 	*errorCode = JSON_ERROR_NONE;
 	// create connection to host
+#ifdef _WIN32
 	SOCKET serverSocket = jsonClient_openConnection(server->ip, server->port);
+#else
+  int serverSocket = jsonClient_openConnection(server->ip, server->port);
+#endif
 	if( serverSocket == 0 )
 	{
 		*errorCode = JSON_ERROR_HOST_NOT_FOUND;
 		return NULL;
 	}
 
-	uint32 startTime = GetTickCount(); // todo: Replace with crossplatform method
+	//uint32 startTime = GetTickCount(); // todo: Replace with crossplatform method
+  uint64 startTime = getTimeMilliseconds();
 	// build json request data
 	// example: {"method": "getwork", "params": [], "id":0}
 	fStr_t* fStr_jsonRequestData = fStr_alloc(1024*512); // 64KB (this is also used as the recv buffer!)
@@ -174,8 +193,12 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		{
 			printf("JSON-RPC warning: Response is larger than buffer\n");
 			// todo: Eventually we should dynamically enlarge the buffer
+#ifdef _WIN32
 			closesocket(serverSocket);
-			fStr_free(fStr_jsonRequestData);
+#else
+	      close(serverSocket);
+#endif
+		fStr_free(fStr_jsonRequestData);
 			return NULL;
 		}
 		// wait for data to receive
@@ -190,8 +213,10 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		n = select(serverSocket, &fds, NULL, NULL, &tv ) ;
 		if( n == 0)
 		{
-			uint32 passedTime = GetTickCount() - startTime;
+			//uint32 passedTime = GetTickCount() - startTime;
+      uint64 passedTime = getTimeMilliseconds();
 			printf("JSON request timed out after %dms\n", passedTime);
+    
 			break;
 		}
 		else if( n == -1 )
@@ -199,7 +224,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 			printf("JSON receive error\n");
 			break;
 		}
-		sint32 r = recv(serverSocket, (char*)(recvBuffer+recvIndex), remainingRecvSize, 0);
+		ssize_t r = recv(serverSocket, (char*)(recvBuffer+recvIndex), remainingRecvSize, 0);
 		if( r <= 0 )
 		{
 			// client closed connection
@@ -215,9 +240,9 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 			{
 				// did we receive the end of the header already?
 				sint32 scanStart = (sint32)recvIndex - (sint32)r;
-				scanStart = max(scanStart-8, 0);
+				scanStart = std::max(scanStart-8, 0);
 				sint32 scanEnd = (sint32)(recvIndex);
-				scanEnd = max(scanEnd-4, 0);
+				scanEnd = std::max(scanEnd-4, 0);
 				for(sint32 s=scanStart; s<=scanEnd; s++)
 				{
 					// is header end?
@@ -229,7 +254,11 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 						if( s == 0 )
 						{
 							printf("JSON-RPC warning: Server sent headerless HTTP response\n");
+#ifdef _WIN32
 							closesocket(serverSocket);
+#else
+			                close(serverSocket);
+#endif
 							fStr_free(fStr_jsonRequestData);
 							return NULL;
 						}
@@ -263,7 +292,11 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 								if( httpCode == 401 )
 								{
 									printf("JSON-RPC: Request failed, authorization required (wrong login data)\n");
+#ifdef _WIN32
 									closesocket(serverSocket);
+#else
+							        close(serverSocket);
+#endif
 									fStr_free(fStr_jsonRequestData);
 									*errorCode = httpCode + 1000;
 									return NULL;
@@ -284,7 +317,11 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 						if( contentLength <= 0 )
 						{
 							printf("JSON-RPC warning: Content-Length header field not present\n");
+#ifdef _WIN32
 							closesocket(serverSocket);
+#else
+			                close(serverSocket);
+#endif
 							fStr_free(fStr_jsonRequestData);
 							return NULL;
 						}
@@ -315,7 +352,11 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		// close connection (we kind of force this)
 		if( serverSocket != 0 )
 		{
+#ifdef _WIN32
 			closesocket(serverSocket);
+#else
+            close(serverSocket);
+#endif
 			serverSocket = 0;
 		}
 		// get request result data
@@ -344,7 +385,11 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	// close connection
 	if( serverSocket != 0 )
 	{
+#ifdef _WIN32
 		closesocket(serverSocket);
+#else
+        close(serverSocket);
+#endif
 		serverSocket = 0;
 	}
 	// free everything again

@@ -1,6 +1,9 @@
 #include"global.h"
+#ifndef _WIN32
+#include <errno.h>
+#endif
 
-
+#ifdef _WIN32
 SOCKET xptClient_openConnection(char *IP, int Port)
 {
 	SOCKET s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -10,8 +13,23 @@ SOCKET xptClient_openConnection(char *IP, int Port)
 	addr.sin_port=htons(Port);
 	addr.sin_addr.s_addr=inet_addr(IP);
 	int result = connect(s,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN));
-	if( result )
+  if( result )
 	{
+		return 0;
+	}
+#else
+int xptClient_openConnection(char *IP, int Port)
+{
+  int s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(sockaddr_in));
+  addr.sin_family = AF_INET;
+  addr.sin_port=htons(Port);
+  addr.sin_addr.s_addr = inet_addr(IP);
+  int result = connect(s, (sockaddr*)&addr, sizeof(sockaddr_in));
+#endif
+  if( result < 0)
+{
 		return 0;
 	}
 	return s;
@@ -24,13 +42,24 @@ SOCKET xptClient_openConnection(char *IP, int Port)
 xptClient_t* xptClient_connect(jsonRequestTarget_t* target, uint32 payloadNum)
 {
 	// first try to connect to the given host/port
+#ifdef _WIN32
 	SOCKET clientSocket = xptClient_openConnection(target->ip, target->port);
+#else
+  int clientSocket = xptClient_openConnection(target->ip, target->port);
+#endif
 	if( clientSocket == 0 )
 		return NULL;
+#ifdef _WIN32
 	// set socket as non-blocking
 	unsigned int nonblocking=1;
 	unsigned int cbRet;
 	WSAIoctl(clientSocket, FIONBIO, &nonblocking, sizeof(nonblocking), NULL, 0, (LPDWORD)&cbRet, NULL, NULL);
+#else
+  int flags, err;
+  flags = fcntl(clientSocket, F_GETFL, 0); 
+  flags |= O_NONBLOCK;
+  err = fcntl(clientSocket, F_SETFL, flags); //ignore errors for now..
+#endif
 	// initialize the client object
 	xptClient_t* xptClient = (xptClient_t*)malloc(sizeof(xptClient_t));
 	memset(xptClient, 0x00, sizeof(xptClient_t));
@@ -39,8 +68,12 @@ xptClient_t* xptClient_connect(jsonRequestTarget_t* target, uint32 payloadNum)
 	xptClient->recvBuffer = xptPacketbuffer_create(64*1024);
 	fStrCpy(xptClient->username, target->authUser, 127);
 	fStrCpy(xptClient->password, target->authPass, 127);
-	xptClient->payloadNum = max(1, min(127, payloadNum));
+	xptClient->payloadNum = std::max<uint32>(1, std::min<uint32>(127, payloadNum));
+#ifdef _WIN32
 	InitializeCriticalSection(&xptClient->cs_shareSubmit);
+#else
+  pthread_mutex_init(&xptClient->cs_shareSubmit, NULL);
+#endif
 	xptClient->list_shareSubmitQueue = simpleList_create(4);
 	// send worker login
 	xptClient_sendWorkerLogin(xptClient);
@@ -57,7 +90,11 @@ void xptClient_free(xptClient_t* xptClient)
 	xptPacketbuffer_free(xptClient->recvBuffer);
 	if( xptClient->clientSocket != 0 )
 	{
+#ifdef _WIN32
 		closesocket(xptClient->clientSocket);
+#else
+    close(xptClient->clientSocket);
+#endif
 	}
 	simpleList_free(xptClient->list_shareSubmitQueue);
 	free(xptClient);
@@ -68,8 +105,8 @@ void xptClient_free(xptClient_t* xptClient)
  */
 void xptClient_sendWorkerLogin(xptClient_t* xptClient)
 {
-	uint32 usernameLength = min(127, fStrLen(xptClient->username));
-	uint32 passwordLength = min(127, fStrLen(xptClient->password));
+	uint32 usernameLength = std::min(127, fStrLen(xptClient->username));
+	uint32 passwordLength = std::min(127, fStrLen(xptClient->password));
 	// build the packet
 	bool sendError = false;
 	xptPacketbuffer_beginWritePacket(xptClient->sendBuffer, XPT_OPC_C_AUTH_REQ);
@@ -139,7 +176,11 @@ bool xptClient_process(xptClient_t* xptClient)
 	if( xptClient == NULL )
 		return false;
 	// are there shares to submit?
+#ifdef _WIN32
 	EnterCriticalSection(&xptClient->cs_shareSubmit);
+#else
+    pthread_mutex_lock(&xptClient->cs_shareSubmit);
+#endif
 	if( xptClient->list_shareSubmitQueue->objectCount > 0 )
 	{
 		for(uint32 i=0; i<xptClient->list_shareSubmitQueue->objectCount; i++)
@@ -151,22 +192,34 @@ bool xptClient_process(xptClient_t* xptClient)
 		// clear list
 		xptClient->list_shareSubmitQueue->objectCount = 0;
 	}
+#ifdef _WIN32
 	LeaveCriticalSection(&xptClient->cs_shareSubmit);
+#else
+  pthread_mutex_unlock(&xptClient->cs_shareSubmit);
+#endif
 	// check for packets
 	sint32 packetFullSize = 4; // the packet always has at least the size of the header
 	if( xptClient->recvSize > 0 )
 		packetFullSize += xptClient->recvSize;
 	sint32 bytesToReceive = (sint32)(packetFullSize - xptClient->recvIndex);
 	// packet buffer is always large enough at this point
-	sint32 r = recv(xptClient->clientSocket, (char*)(xptClient->recvBuffer->buffer+xptClient->recvIndex), bytesToReceive, 0);
+	ssize_t r = recv(xptClient->clientSocket, (char*)(xptClient->recvBuffer->buffer+xptClient->recvIndex), bytesToReceive, 0);
 	if( r <= 0 )
 	{
+#ifdef _WIN32
 		// receive error, is it a real error or just because of non blocking sockets?
 		if( WSAGetLastError() != WSAEWOULDBLOCK )
 		{
 			xptClient->disconnected = true;
 			return false;
 		}
+#else
+    if(errno != EAGAIN)
+    {
+    xptClient->disconnected = true;
+    return false;
+    }
+#endif
 		return true;
 	}
 	xptClient->recvIndex += r;
@@ -205,7 +258,11 @@ bool xptClient_process(xptClient_t* xptClient)
 			// disconnect
 			if( xptClient->clientSocket != 0 )
 			{
+#ifdef _WIN32
 				closesocket(xptClient->clientSocket);
+#else
+	        close(xptClient->clientSocket);
+#endif
 				xptClient->clientSocket = 0;
 			}
 			xptClient->disconnected = true;
@@ -239,7 +296,13 @@ bool xptClient_isAuthenticated(xptClient_t* xptClient)
 
 void xptClient_foundShare(xptClient_t* xptClient, xptShareToSubmit_t* xptShareToSubmit)
 {
+#ifdef _WIN32
 	EnterCriticalSection(&xptClient->cs_shareSubmit);
 	simpleList_add(xptClient->list_shareSubmitQueue, xptShareToSubmit);
 	LeaveCriticalSection(&xptClient->cs_shareSubmit);
+#else
+  pthread_mutex_lock(&xptClient->cs_shareSubmit);
+  simpleList_add(xptClient->list_shareSubmitQueue, xptShareToSubmit);
+  pthread_mutex_unlock(&xptClient->cs_shareSubmit);
+#endif
 }

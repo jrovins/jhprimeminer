@@ -27,3 +27,4 @@ uint32 packetBuffer_length(packetBuffer_t *pb);
 #define packetBuffer512_def unsigned char _pbMem[512]; packetBuffer_t pb; packetBuffer_init(&pb, _pbMem, 512)
 #define packetBuffer128_def unsigned char _pbMem[128]; packetBuffer_t pb; packetBuffer_init(&pb, _pbMem, 128)
 
+

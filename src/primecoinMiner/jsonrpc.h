@@ -83,7 +83,11 @@ typedef struct _jsonRpcServer_t jsonRpcServer_t;
 typedef struct  
 {
 	jsonRpcServer_t* jsonRpcServer;
+#ifdef _WIN32
 	SOCKET clientSocket;
+#else
+	int clientSocket;
+#endif
 	bool disconnected;
 	// recv buffer
 	uint32 recvIndex;
@@ -100,7 +104,11 @@ typedef struct
 
 typedef struct _jsonRpcServer_t 
 {
+#ifdef _WIN32
 	SOCKET acceptSocket;
+#else
+	int acceptSocket;
+#endif
 	simpleList_t* list_connections;
 }jsonRpcServer_t;
 

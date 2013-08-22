@@ -6,6 +6,7 @@
 #include <bitset>
 #include <time.h>
 #include <set>
+#include "ticker.h"
 
 
 // Prime Table
@@ -14,8 +15,13 @@
 uint32* vPrimesTwoInverse;
 uint32 vPrimesSize = 0;
 
+#ifdef _WIN32
 __declspec( thread ) BN_CTX* pctx = NULL;
+#else
+  BN_CTX* pctx = NULL;
+#endif
 
+/* not used and gives errors because of LARGE_INTEGER, so disable for now
 // changed to return the ticks since reboot
 // doesnt need to be the correct time, just a more or less random input value
 uint64 GetTimeMicros()
@@ -23,7 +29,7 @@ uint64 GetTimeMicros()
    LARGE_INTEGER t;
    QueryPerformanceCounter(&t);
    return (uint64)t.QuadPart;
-}
+}*/
 
 
 std::vector<unsigned int> vPrimes;
@@ -562,7 +568,11 @@ bool TargetSetFractionalDifficulty(uint64 nFractionalDifficulty, unsigned int& n
 
 std::string TargetToString(unsigned int nBits)
 {
+#ifdef _WIN32
    __debugbreak(); // return strprintf("%02x.%06x", TargetGetLength(nBits), TargetGetFractional(nBits));
+#else
+  raise(SIGTRAP); // not sure if this is really portable
+#endif
    return NULL; // todo
 }
 
@@ -595,7 +605,7 @@ bool TargetGetMint(unsigned int nBits, uint64& nMint)
 }
 
 // Get next target value
-bool TargetGetNext(unsigned int nBits, int64 nInterval, int64 nTargetSpacing, int64 nActualSpacing, unsigned int& nBitsNext)
+bool TargetGetNext(unsigned int nBits, uint64_t nInterval, uint64_t nTargetSpacing, uint64 nActualSpacing, unsigned int& nBitsNext)
 {
    nBitsNext = nBits;
    // Convert length into fractional difficulty
@@ -771,6 +781,7 @@ bool ProbablePrimeChainTest(const mpz_class& bnPrimeChainOrigin, unsigned int nB
 //   false - prime chain too short (none of nChainLength meeting target)
 static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPrimalityTestParams& testParams)
 {
+	uint64 start = getTimeMilliseconds();
    const unsigned int nBits = testParams.nBits;
    const unsigned int nCandidateType = testParams.nCandidateType;
    unsigned int& nChainLength = testParams.nChainLength;
@@ -813,6 +824,7 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 
    return (nChainLength >= nBits);
 }
+// auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
 
 //// Sieve for mining
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;
@@ -917,7 +929,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
    bool bFullScan = false;
 
-   uint32 start = GetTickCount();
+   uint64 start = getTimeMilliseconds();
    //while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
@@ -962,8 +974,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       {				
          //if (!sieveRescan)
          //{				
-         primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+         primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
+         primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
          if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
             primeStats.nChainHit++;
          //}
@@ -1016,12 +1028,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          struct tm * timeinfo;
          timeinfo = localtime (&now);
          char sNow [80];
-         strftime (sNow, 80, "%x - %X",timeinfo);
+         strftime (sNow, 80, "%x-%X",timeinfo);
 
-         float shareValue = GetValueOfShareMajor( shareDifficultyMajor);
-         float shareDiff = GetChainDifficulty(nProbableChainLength);
+		float shareDiff = GetChainDifficulty(nProbableChainLength);
 
-         printf("%s SHARE FOUND! (Th#:%2u) DIFF:%8f VAL:%8f TYPE:%u", sNow, threadIndex, shareDiff, shareValue, nCandidateType);
+         printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
          if (nPrintDebugMessages)
          {
             printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());
@@ -1035,9 +1046,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          multipleShare = true;
          jhMiner_pushShare_primecoin(blockRawData, block);
          primeStats.foundShareCount ++;
-         primeStats.fShareValue += shareValue;
-         primeStats.fBlockShareValue += shareValue;
-         RtlZeroMemory(blockRawData, 256);
+         memset(blockRawData, 0, 256);
       }
       //if(TargetGetLength(nProbableChainLength) >= 1)
       //	nPrimesHit++;
@@ -1048,7 +1057,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    //	delete *psieve;
    //	*psieve = NULL;
    //}
-   uint32 end = GetTickCount(); 
+   uint64 end = getTimeMilliseconds(); 
    primeStats.nTestTime += end-start;
    return rtnValue; // stop as timed out
 }
@@ -1063,8 +1072,8 @@ double GetPrimeDifficulty(unsigned int nBits)
 // Estimate work transition target to longer prime chain
 unsigned int EstimateWorkTransition(unsigned int nPrevWorkTransition, unsigned int nBits, unsigned int nChainLength)
 {
-   int64 nInterval = 500;
-   int64 nWorkTransition = nPrevWorkTransition;
+	uint64_t nInterval = 500;
+	uint64_t nWorkTransition = nPrevWorkTransition;
    unsigned int nBitsCeiling = 0;
    TargetSetLength(TargetGetLength(nBits)+1, nBitsCeiling);
    unsigned int nBitsFloor = 0;
@@ -1498,7 +1507,7 @@ void CSieveOfEratosthenes::AddMultiplier(unsigned int *vMultipliers, const unsig
 bool CSieveOfEratosthenes::Weave()
 {
    // Faster GMP version
-   uint32 start = GetTickCount(); 
+   uint64 start = getTimeMilliseconds(); 
    // Keep all variables local for max performance
    const unsigned int nChainLength = this->nChainLength;
    const unsigned int nBTChainLength = this->nBTChainLength;
@@ -1613,7 +1622,7 @@ bool CSieveOfEratosthenes::Weave()
    for (unsigned int j = 0; j < nArrayRounds; j++)
    {
       const unsigned int nMinMultiplier = nL1CacheElements * j;
-      const unsigned int nMaxMultiplier = min(nL1CacheElements * (j + 1), nSieveSize);
+      const unsigned int nMaxMultiplier = std::min(nL1CacheElements * (j + 1), nSieveSize);
 
       //TODO: stop on new block
       //if (pindexPrev != pindexBest)
@@ -1692,7 +1701,7 @@ bool CSieveOfEratosthenes::Weave()
 
    this->nPrimeSeq = nPrimes - 1;
 
-   uint32 end = GetTickCount(); 
+   uint64 end = getTimeMilliseconds(); 
    primeStats.nWaveTime += end-start;
    primeStats.nWaveRound ++;
    return false;

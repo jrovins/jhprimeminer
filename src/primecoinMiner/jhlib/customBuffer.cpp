@@ -1,9 +1,10 @@
 #include"./JHLib.h"
+#include <cstdlib>
 
 customBuffer_t* customBuffer_create(sint32 initialLimit, uint32 objectSize)
 {
 	customBuffer_t* customBuffer = (customBuffer_t*)malloc(sizeof(customBuffer_t));
-	RtlZeroMemory(customBuffer, sizeof(customBuffer_t));
+	memset(customBuffer, 0, sizeof(customBuffer_t));
 
 	if( initialLimit == 0 ) initialLimit = 4;
 	customBuffer->objectLimit = initialLimit;
@@ -30,7 +31,7 @@ void customBuffer_add(customBuffer_t* customBuffer, void* data)
 		customBuffer->objectLimit += (customBuffer->objectLimit/2+1);
 		customBuffer->objects = (void**)realloc(customBuffer->objects, customBuffer->objectSize * customBuffer->objectLimit);
 	}
-	RtlCopyMemory(((uint8*)customBuffer->objects)+customBuffer->objectCount*customBuffer->objectSize, data, customBuffer->objectSize);
+	memcpy(((uint8*)customBuffer->objects)+customBuffer->objectCount*customBuffer->objectSize, data, customBuffer->objectSize);
 	customBuffer->objectCount++;
 }
 
@@ -40,10 +41,10 @@ void customBuffer_add(customBuffer_t* customBuffer, void* data, uint32 count)
 		return;
 	if( customBuffer->objectCount+count >= customBuffer->objectLimit )
 	{
-		customBuffer->objectLimit += max(customBuffer->objectCount+count, (customBuffer->objectLimit/2+1));
+		customBuffer->objectLimit += std::max(customBuffer->objectCount+count, (customBuffer->objectLimit/2+1));
 		customBuffer->objects = (void**)realloc(customBuffer->objects, customBuffer->objectSize * customBuffer->objectLimit);
 	}
-	RtlCopyMemory(((uint8*)customBuffer->objects)+customBuffer->objectCount*customBuffer->objectSize, data, customBuffer->objectSize*count);
+	memcpy(((uint8*)customBuffer->objects)+customBuffer->objectCount*customBuffer->objectSize, data, customBuffer->objectSize*count);
 	customBuffer->objectCount += count;
 }
 
@@ -56,12 +57,12 @@ void customBuffer_insert(customBuffer_t* customBuffer, sint32 insertIndex, void*
 		// todo: Insert can be optimized when realloc is used
 	}
 	// shift post-insert part
-	uint32 insertByteIndex = insertIndex * customBuffer->objectSize;
+	//uint32 insertByteIndex = insertIndex * customBuffer->objectSize; unused
 	for(sint32 i=(sint32)customBuffer->objectCount; i>=(sint32)insertIndex; i--)
 	{
-		RtlCopyMemory(((uint8*)customBuffer->objects)+(i+1)*customBuffer->objectSize, ((uint8*)customBuffer->objects)+(i)*customBuffer->objectSize, customBuffer->objectSize);
+		memcpy(((uint8*)customBuffer->objects)+(i+1)*customBuffer->objectSize, ((uint8*)customBuffer->objects)+(i)*customBuffer->objectSize, customBuffer->objectSize);
 	}
-	RtlCopyMemory(((uint8*)customBuffer->objects)+insertIndex*customBuffer->objectSize, data, customBuffer->objectSize);
+	memcpy(((uint8*)customBuffer->objects)+insertIndex*customBuffer->objectSize, data, customBuffer->objectSize);
 	customBuffer->objectCount += 1;
 }
 
@@ -87,7 +88,7 @@ void customBuffer_remove(customBuffer_t* customBuffer, uint32 removeIndex)
 {
 	if( removeIndex >= customBuffer->objectCount )
 		return;
-	RtlCopyMemory(((uint8*)customBuffer->objects)+removeIndex*customBuffer->objectSize, ((uint8*)customBuffer->objects)+(customBuffer->objectCount-1)*customBuffer->objectSize, customBuffer->objectSize);
+	memcpy(((uint8*)customBuffer->objects)+removeIndex*customBuffer->objectSize, ((uint8*)customBuffer->objects)+(customBuffer->objectCount-1)*customBuffer->objectSize, customBuffer->objectSize);
 	customBuffer->objectCount--;
 }
 
@@ -100,14 +101,15 @@ void* customBuffer_get(customBuffer_t* customBuffer, sint32 index)
 customBuffer_t* customBuffer_duplicate(customBuffer_t* customBufferSource)
 {
 	customBuffer_t* customBuffer = (customBuffer_t*)malloc(sizeof(customBuffer_t));
-	RtlZeroMemory(customBuffer, sizeof(customBuffer_t));
+	memset(customBuffer, 0, sizeof(customBuffer_t));
 
 	customBuffer->objectLimit = customBufferSource->objectCount; // limit = count
 	customBuffer->objectCount = customBufferSource->objectCount;
 	customBuffer->objectSize = customBufferSource->objectSize;
 	customBuffer->objects = (void*)malloc(customBuffer->objectSize * customBuffer->objectLimit);
-	RtlCopyMemory(customBuffer->objects, customBufferSource->objects, customBuffer->objectSize * customBuffer->objectLimit);
+	memcpy(customBuffer->objects, customBufferSource->objects, customBuffer->objectSize * customBuffer->objectLimit);
 	customBuffer->isPreallocated = false;
 
 	return customBuffer;
 }
+

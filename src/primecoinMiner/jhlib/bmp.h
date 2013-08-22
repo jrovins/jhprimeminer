@@ -14,4 +14,4 @@ typedef struct
 bitmap_t *bmp_load(char *path);
 void bmp_free(bitmap_t *bmp);
 
-BOOL bmp_save(char *path, bitmap_t *bitmap);
+bool bmp_save(char *path, bitmap_t *bitmap);

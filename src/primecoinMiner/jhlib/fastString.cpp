@@ -1,5 +1,6 @@
 #include"./JHLib.h"
 #include<stdio.h>
+#include <cstdlib>
 
 // local variables
 extern fStr_format_t fStr_formatInfo_ASCII;
@@ -18,7 +19,11 @@ fStr_t* fStr_alloc(uint32 bufferSize, uint32 format)
 	}
 	else
 	{
+#ifdef _WIN32
 		__debugbreak(); // unknown format
+#else
+	    raise(SIGTRAP);
+#endif
 	}
 	return fStr;
 }
@@ -43,7 +48,11 @@ void _fStr_allocForBuffer(fStr_t* fStr, uint8* buffer, uint32 bufferSize, uint32
 		fStr->format = &fStr_formatInfo_UTF8;
 	}
 	else
+#ifdef _WIN32
 		__debugbreak(); // unknown format
+#else
+	    raise(SIGTRAP);
+#endif
 }
 
 /*
@@ -121,8 +130,10 @@ void fStr_copy(fStr_t* fStr, char *sourceASCII)
 	fStr->format->fstr_copyASCII(fStr, sourceASCII);
 	if( fStr->length >= fStr->limit )
 	{
+#ifdef _WIN32
 		OutputDebugString("fStr: Bufferoverflow detected");
-		ExitProcess(-32001);
+#endif
+		exit(-32001);
 	}
 }
 
@@ -131,8 +142,10 @@ void fStr_append(fStr_t* fStr, char *sourceASCII)
 	fStr->format->fStr_appendASCII(fStr, sourceASCII);
 	if( fStr->length >= fStr->limit )
 	{
+#ifdef _WIN32
 		OutputDebugString("fStr: Bufferoverflow detected");
-		ExitProcess(-32002);
+#endif
+		exit(-32002);
 	}
 }
 
@@ -141,8 +154,10 @@ void fStr_copy(fStr_t* fStr, fStr_t* source)
 	fStr->format->fstr_copy(fStr, source);
 	if( fStr->length >= fStr->limit )
 	{
+#ifdef _WIN32
 		OutputDebugString("fStr: Bufferoverflow detected");
-		ExitProcess(-32001);
+#endif
+		exit(-32001);
 	}
 }
 
@@ -151,8 +166,10 @@ void fStr_append(fStr_t* fStr, fStr_t* source)
 	fStr->format->fStr_append(fStr, source);
 	if( fStr->length >= fStr->limit )
 	{
+#ifdef _WIN32
 		OutputDebugString("fStr: Bufferoverflow detected");
-		ExitProcess(-32001);
+#endif
+		exit(-32001);
 	}
 }
 
@@ -169,7 +186,11 @@ int fStr_appendFormatted(fStr_t* fStr, char *format, ...)
 	param++; // skip first parameter
 	unsigned int formattedLength = 0;	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
 #else
+#ifdef _WIN32
 	unsigned int *param = (unsigned int*)_ADDRESSOF(format);
+#else
+	unsigned int *param = (unsigned int*)tmp_addressof(format);
+#endif
 	param++; // skip first parameter
 	unsigned int formattedLength = 0;
 	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
@@ -288,13 +309,17 @@ fStr_format_t fStr_formatInfo_UTF8 =
 
 char* fStrDup(char *src)
 {
+#ifdef _WIN32
 	return _strdup(src);
+#else
+	return strdup(src);
+#endif
 }
 
 char* fStrDup(char *src, sint32 length)
 {
 	char* ns = (char*)malloc(length+1);
-	RtlCopyMemory(ns, src, length);
+	memcpy(ns, src, length);
 	ns[length] = '\0';
 	return ns;
 }
@@ -327,7 +352,7 @@ char** fStrTokenize(char* src, char* tokens)
 {
 	// create token lookup table
 	bool lookup[256];
-	RtlZeroMemory(lookup, sizeof(lookup));
+	memset(lookup, 0, sizeof(lookup));
 	while( *tokens )
 	{
 		lookup[(uint8)(*tokens)] = true;
@@ -335,7 +360,7 @@ char** fStrTokenize(char* src, char* tokens)
 	}
 	// tokenize string
 	char** params = (char**)malloc(sizeof(char*) * 64);
-	RtlZeroMemory(params, sizeof(char*) * 64);
+	memset(params, 0, sizeof(char*) * 64);
 	uint32 indexStart = 0;
 	uint32 paramCounter = 0;
 	for(uint32 i=0; i<0x7FFFFFFF; i++)
@@ -464,3 +489,4 @@ sint32 fStrCmpCaseInsensitive(uint8* str1, uint8* str2, uint32 length)
 	}
 	return 0;
 }
+

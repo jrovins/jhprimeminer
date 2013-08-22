@@ -1,11 +1,12 @@
 #include"./JHLib.h"
+#include <cstdlib>
 
 // malloc can be a real performance eater - thus introduce 'the simpleList cache' which caches up to 1000 lists and 1000 32-entry buffers
 
 simpleList_t* simpleList_create(sint32 initialLimit)
 {
 	simpleList_t* simpleList = (simpleList_t*)malloc(sizeof(simpleList_t));
-	RtlZeroMemory(simpleList, sizeof(simpleList_t));
+	memset(simpleList, 0, sizeof(simpleList_t));
 
 	if( initialLimit == 0 ) initialLimit = 4;
 	simpleList->objectLimit = initialLimit;
@@ -17,7 +18,7 @@ simpleList_t* simpleList_create(sint32 initialLimit)
 
 void simpleList_create(simpleList_t* simpleList, sint32 initialLimit)
 {
-	RtlZeroMemory(simpleList, sizeof(simpleList_t));
+	memset(simpleList, 0, sizeof(simpleList_t));
 	if( initialLimit == 0 ) initialLimit = 4;
 	simpleList->objectLimit = initialLimit;
 	simpleList->objects = (void**)malloc(sizeof(void*) * simpleList->objectLimit);
@@ -27,7 +28,7 @@ void simpleList_create(simpleList_t* simpleList, sint32 initialLimit)
 
 void simpleList_create(simpleList_t* simpleList, sint32 initialLimit, void** rawArray)
 {
-	RtlZeroMemory(simpleList, sizeof(simpleList_t));
+	memset(simpleList, 0, sizeof(simpleList_t));
 	if( initialLimit == 0 ) initialLimit = 4;
 	simpleList->objectLimit = initialLimit;
 	simpleList->objects = rawArray;
@@ -55,7 +56,7 @@ void simpleList_add(simpleList_t* simpleList, void* object) // todo: Via define 
 		{
 			void* oldObjectPtr = simpleList->objects;
 			simpleList->objects = (void**)malloc(sizeof(void*) * simpleList->objectLimit);
-			RtlCopyMemory(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
+			memcpy(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
 		}
 		else
 			simpleList->objects = (void**)realloc(simpleList->objects, sizeof(void*) * simpleList->objectLimit);
@@ -81,7 +82,7 @@ void simpleList_addUnique(simpleList_t* simpleList, void* object)
 		{
 			void* oldObjectPtr = simpleList->objects;
 			simpleList->objects = (void**)malloc(sizeof(void*) * simpleList->objectLimit);
-			RtlCopyMemory(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
+			memcpy(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
 		}
 		else
 			simpleList->objects = (void**)realloc(simpleList->objects, sizeof(void*) * simpleList->objectLimit);
@@ -107,7 +108,7 @@ bool simpleList_addUniqueFeedback(simpleList_t* simpleList, void* object)
 		{
 			void* oldObjectPtr = simpleList->objects;
 			simpleList->objects = (void**)malloc(sizeof(void*) * simpleList->objectLimit);
-			RtlCopyMemory(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
+			memcpy(simpleList->objects, oldObjectPtr, sizeof(void*) * simpleList->objectCount);
 		}
 		else
 			simpleList->objects = (void**)realloc(simpleList->objects, sizeof(void*) * simpleList->objectLimit);
@@ -178,7 +179,7 @@ void simpleListCached_add(simpleListCached_t* simpleListCached, void* object) //
 		{
 			void* oldObjectPtr = simpleListCached->objects;
 			simpleListCached->objects = (void**)malloc(sizeof(void*) * simpleListCached->objectLimit);
-			RtlCopyMemory(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
+			memcpy(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
 		}
 		else
 			simpleListCached->objects = (void**)realloc(simpleListCached->objects, sizeof(void*) * simpleListCached->objectLimit);
@@ -204,7 +205,7 @@ void simpleListCached_addUnique(simpleListCached_t* simpleListCached, void* obje
 		{
 			void* oldObjectPtr = simpleListCached->objects;
 			simpleListCached->objects = (void**)malloc(sizeof(void*) * simpleListCached->objectLimit);
-			RtlCopyMemory(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
+			memcpy(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
 		}
 		else
 			simpleListCached->objects = (void**)realloc(simpleListCached->objects, sizeof(void*) * simpleListCached->objectLimit);
@@ -230,7 +231,7 @@ bool simpleListCached_addUniqueFeedback(simpleListCached_t* simpleListCached, vo
 		{
 			void* oldObjectPtr = simpleListCached->objects;
 			simpleListCached->objects = (void**)malloc(sizeof(void*) * simpleListCached->objectLimit);
-			RtlCopyMemory(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
+			memcpy(simpleListCached->objects, oldObjectPtr, sizeof(void*) * simpleListCached->objectCount);
 		}
 		else
 			simpleListCached->objects = (void**)realloc(simpleListCached->objects, sizeof(void*) * simpleListCached->objectLimit);
@@ -275,9 +276,14 @@ void* simpleListCached_get(simpleListCached_t* simpleListCached, sint32 index)
 objectCreatorCache_t* objectCreatorCache_create(uint32 objectSize, uint32 initialEntryCount, uint32 stepScale, uint32 stepAdd)
 {
 	if( initialEntryCount == 0 )
+#ifdef _WIN32
 		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif
+  
 	objectCreatorCache_t* objectCreatorCache = (objectCreatorCache_t*)malloc(sizeof(objectCreatorCache_t));
-	RtlZeroMemory(objectCreatorCache, sizeof(objectCreatorCache_t));
+	memset(objectCreatorCache, 0, sizeof(objectCreatorCache_t));
 	objectCreatorCache->currentCacheStep = initialEntryCount;
 	objectCreatorCache->currentCacheCount = initialEntryCount;
 	objectCreatorCache->currentCacheStepMult = stepScale;
@@ -286,7 +292,7 @@ objectCreatorCache_t* objectCreatorCache_create(uint32 objectSize, uint32 initia
 	objectCreatorCache->dataBlocks = simpleList_create(16);
 	objectCreatorCache->currentEmitPointer = (uint8*)malloc(objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
 	objectCreatorCache->endEmitPointer = objectCreatorCache->currentEmitPointer + (objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
-	RtlZeroMemory(objectCreatorCache->currentEmitPointer, objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
+	memset(objectCreatorCache->currentEmitPointer, 0, objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
 	simpleList_add(objectCreatorCache->dataBlocks, objectCreatorCache->currentEmitPointer);
 	return objectCreatorCache;
 }
@@ -306,7 +312,7 @@ void* objectCreatorCache_getNext(objectCreatorCache_t* objectCreatorCache)
 	objectCreatorCache->currentCacheStep =  objectCreatorCache->currentCacheStep * objectCreatorCache->currentCacheStepMult + objectCreatorCache->currentCacheStepAdd;
 	objectCreatorCache->currentEmitPointer = (uint8*)malloc(objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
 	objectCreatorCache->endEmitPointer = objectCreatorCache->currentEmitPointer + (objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
-	RtlZeroMemory(objectCreatorCache->currentEmitPointer, objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
+	memset(objectCreatorCache->currentEmitPointer, 0, objectCreatorCache->objectSize * objectCreatorCache->currentCacheCount);
 	simpleList_add(objectCreatorCache->dataBlocks, objectCreatorCache->currentEmitPointer);
 	// return object
 	return objectPtr;
@@ -323,3 +329,4 @@ void objectCreatorCache_freeAll(objectCreatorCache_t* objectCreatorCache)
 	simpleList_free(objectCreatorCache->dataBlocks);
 	free(objectCreatorCache);
 }
+

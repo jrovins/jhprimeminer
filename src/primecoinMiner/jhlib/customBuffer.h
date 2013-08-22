@@ -19,3 +19,4 @@ uint32 customBuffer_generateHash(customBuffer_t* customBuffer);
 void* customBuffer_get(customBuffer_t* customBuffer, sint32 index);
 
 customBuffer_t* customBuffer_duplicate(customBuffer_t* customBufferSource);
+

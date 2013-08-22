@@ -52,7 +52,7 @@ int esprintf_xutf8(char *out, char *s, int padRight, int padZero, int width)
 
 int esprintf_d(char *out, int value, int padRight, int padZero, int width)
 {
-	int c = 0;
+	//int c = 0; unused
 	char DezimalStr[32];
 	int dl = 0; //DezimalLength
 	int negative = 0;
@@ -198,14 +198,14 @@ int esprintf_hf(char *out, float valueF, int padRight, int padZero, int width)
 	*out = '.';
 	out++;		
 
-	int dl2 = dl;
+	//int dl2 = dl; unused
 
 	value = (sint32)((valueF - floor(valueF))*100000.0f);
-	c = 0;
+	//c = 0; unused
 	dl = 0; //DezimalLength
 	padZero = 1;
 	width = 6;
-	padRight = 0;
+	//padRight = 0; unused
 	negative = 0;
 	if( value < 0 )
 	{
@@ -281,14 +281,14 @@ int esprintf_hf(char *out, float valueF, int padRight, int padZero, int width)
 int esprintf_c(char *out, char value, int padRight, int padZero, int width)
 {
 	// todo: support for padRight etc.
-	int c = 0;
+	//int c = 0; unused
 	out[0] = value;
 	return 1;
 }
 
 int esprintf_b(char *out, signed long long value, int padRight, int padZero, int width) //"Big" - signed long long
 {
-	int c = 0;
+	//int c = 0; unused
 	char DezimalStr[32];
 	int dl = 0; //DezimalLength
 	int negative = 0;
@@ -316,7 +316,7 @@ int esprintf_b(char *out, signed long long value, int padRight, int padZero, int
 	{
 		int r = 0;
 		int totalDigits = negative + dl;
-		totalDigits = min(totalDigits, width);
+		totalDigits = std::min(totalDigits, width);
 		if( dl >= totalDigits )
 			negative = 0;
 		int NumberDigits = totalDigits - negative;
@@ -360,7 +360,7 @@ int esprintf_b(char *out, signed long long value, int padRight, int padZero, int
 
 int esprintf_u(char *out, unsigned int value, int padRight, int padZero, int width)
 {
-	int c = 0;
+	//int c = 0; unused
 	char DezimalStr[32];
 	int dl = 0; //DezimalLength
 	if( value == 0 )
@@ -382,7 +382,7 @@ int esprintf_u(char *out, unsigned int value, int padRight, int padZero, int wid
 	{
 		int r = 0;
 		int totalDigits = dl;
-		totalDigits = min(totalDigits, width);
+		totalDigits = std::min(totalDigits, width);
 		int NumberDigits = totalDigits;
 		int PadDigits = width - totalDigits;
 		char PadDigit = ' ';
@@ -413,7 +413,7 @@ int esprintf_u(char *out, unsigned int value, int padRight, int padZero, int wid
 
 int esprintf_X(char *out, unsigned int value, int padRight, int padZero, int width, int UpperCase)
 {
-	int c = 0;
+	//int c = 0; unused
 	char DezimalStr[32];
 	int dl = 0; //HexLength
 	while(value)
@@ -430,7 +430,7 @@ int esprintf_X(char *out, unsigned int value, int padRight, int padZero, int wid
 	{
 		int r = 0;
 		int totalDigits = dl;
-		totalDigits = min(totalDigits, width);
+		totalDigits = std::min(totalDigits, width);
 		int NumberDigits = totalDigits;
 		int PadDigits = width - totalDigits;
 		char PadDigit = ' ';
@@ -464,8 +464,10 @@ int esprintf_X(char *out, unsigned int value, int padRight, int padZero, int wid
  */
 #ifdef _WIN64
 void __cdecl _esprintf(char *out, char *format, uint64 *param, unsigned int *lengthOut)
-#else
+#elif defined (_WIN32)
 void __cdecl _esprintf(char *out, char *format, unsigned int *param, unsigned int *lengthOut)
+#else // gcc
+void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *param, unsigned int *lengthOut) 
 #endif
 {
 	if( lengthOut )
@@ -660,10 +662,15 @@ void esprintf(char *out, char *format, ...)
 		unsigned int formattedLength = 0;
 		_esprintf(out, format, param, &formattedLength);
 	#else
+	#ifdef _WIN32
 		unsigned int *param = (unsigned int*)_ADDRESSOF(format);
+	#else
+		unsigned int *param = (unsigned int*)tmp_addressof(format);
+	#endif
 		param++; // skip first parameter
 		unsigned int formattedLength = 0;
 		_esprintf(out, format, param, &formattedLength);
 	#endif
 
 }
+

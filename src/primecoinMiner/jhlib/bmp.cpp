@@ -77,7 +77,7 @@ void bmp_free(bitmap_t *bmp)
 	free(bmp);
 }
 
-BOOL bmp_save(char *path, bitmap_t *bitmap)
+bool bmp_save(char *path, bitmap_t *bitmap)
 {
 	HANDLE hBG = CreateFile(path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
 	if( hBG == INVALID_HANDLE_VALUE )

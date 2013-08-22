@@ -17,7 +17,11 @@ typedef struct
 
 typedef struct  
 {
+#ifdef _WIN32
 	SOCKET clientSocket;
+#else
+    int clientSocket;
+#endif
 	xptPacketbuffer_t* sendBuffer; // buffer for sending data
 	xptPacketbuffer_t* recvBuffer; // buffer for receiving data
 	// worker info
@@ -38,7 +42,11 @@ typedef struct
 	xptBlockWorkInfo_t blockWorkInfo;
 	xptWorkData_t workData[128]; // size equal to max payload num
 	// shares to submit
+#ifdef _WIN32
 	CRITICAL_SECTION cs_shareSubmit;
+#else
+  pthread_mutex_t cs_shareSubmit;
+#endif
 	simpleList_t* list_shareSubmitQueue;
 }xptClient_t;
 

@@ -1,5 +1,6 @@
 #include"global.h"
-#include <time.h>
+#include <ctime>
+#include "ticker.h"
 
 
 bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& bnFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
@@ -23,10 +24,10 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 	const unsigned int nPrimorialMultiplierMax = 79;
 
 	unsigned int nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-	int64 nTimeExpected = 0;   // time expected to prime chain (micro-second)
-	int64 nTimeExpectedPrev = 0; // time expected to prime chain last time
+	uint64_t nTimeExpected = 0;   // time expected to prime chain (micro-second)
+	uint64_t nTimeExpectedPrev = 0; // time expected to prime chain last time
 	bool fIncrementPrimorial = true; // increase or decrease primorial factor
-	int64 nSieveGenTime = 0;
+	uint64_t nSieveGenTime = 0;
 	
 
 	CSieveOfEratosthenes* psieve = NULL;
@@ -37,9 +38,8 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
    const unsigned long maxNonce = (0x01000000 * threadIndex) | 0x00FF0000;
 	//primecoinBlock->nonce = 0;
 
-	uint32 nTime = GetTickCount() + 1000*600;
-
-	uint32 nStatTime = GetTickCount() + 2000;
+	uint64 nTime = getTimeMilliseconds() + 1000*600;
+	uint64 nStatTime = getTimeMilliseconds() + 2000;
 	
 	// note: originally a wanted to loop as long as (primecoinBlock->workDataHash != jhMiner_getCurrentWorkHash()) did not happen
 	//		 but I noticed it might be smarter to just check if the blockHeight has changed, since that is what is really important
@@ -52,11 +52,11 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 	time_t unixTimeStart;
 	time(&unixTimeStart);
 	uint32 nTimeRollStart = primecoinBlock->timestamp - 5;
-   uint32 nLastRollTime = GetTickCount();
-	uint32 nCurrentTick = nLastRollTime;
+   uint64 nLastRollTime = getTimeMilliseconds();
+	uint64 nCurrentTick = nLastRollTime;
 	while( nCurrentTick < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
 	{
-		nCurrentTick = GetTickCount();
+		nCurrentTick = getTimeMilliseconds();
       // Roll Time stamp every 10 secs.
 		if ((primecoinBlock->xptMode) && (nCurrentTick < nLastRollTime || (nLastRollTime - nCurrentTick >= 10000)))
 		{
@@ -103,7 +103,7 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		mpz_class mpzPrimorial;
 		unsigned int nRoundTests = 0;
 		unsigned int nRoundPrimesHit = 0;
-		int64 nPrimeTimerStart = GetTickCount();
+		uint64 nPrimeTimerStart = getTimeMilliseconds();
 		
 		//if( loopCount > 0 )
 		//{
@@ -134,12 +134,14 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
 		MineProbablePrimeChain(&psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
-		threadHearthBeat[threadIndex] = GetTickCount();
+#ifdef _WIN32
+		threadHearthBeat[threadIndex] = getTimeMilliseconds();
 		if (appQuitSignal)
 		{
 			printf( "Shutting down mining thread %d.\n", threadIndex);
 			return false;
 		}
+#endif
 		//{
 		//	// do nothing here, share is already submitted in MineProbablePrimeChain()
 		//	//primecoinBlock->nonce += 0x00010000;

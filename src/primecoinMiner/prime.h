@@ -10,9 +10,14 @@
 //#if defined(__i386__) || defined(_M_IX86) || defined(_X86_) || defined(__x86_64__) || defined(_M_X64)
 //#define USE_ROTATE
 //#endif
+#include <cstdlib>
 
 //#include "main.h"
+#ifdef _WIN32
 #include "mpirxx.h"
+#else
+#include <gmpxx.h>
+#endif
 
 extern unsigned int nMaxSieveSize;
 extern unsigned int nSievePercentage;
@@ -88,7 +93,7 @@ bool TargetSetFractionalDifficulty(uint64 nFractionalDifficulty, unsigned int& n
 std::string TargetToString(unsigned int nBits);
 unsigned int TargetFromInt(unsigned int nLength);
 bool TargetGetMint(unsigned int nBits, uint64& nMint);
-bool TargetGetNext(unsigned int nBits, int64 nInterval, int64 nTargetSpacing, int64 nActualSpacing, unsigned int& nBitsNext);
+bool TargetGetNext(unsigned int nBits, uint64_t nInterval, uint64_t nTargetSpacing, uint64_t nActualSpacing, unsigned int& nBitsNext);
 
 // Mine probable prime chain of form: n = h * p# +/- 1
 //bool MineProbablePrimeChain(CBlock& block, CBigNum& bnFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, unsigned int& nTests, unsigned int& nPrimesHit);
@@ -98,7 +103,7 @@ enum // prime chain type
 {
 	PRIME_CHAIN_CUNNINGHAM1 = 1u,
 	PRIME_CHAIN_CUNNINGHAM2 = 2u,
-	PRIME_CHAIN_BI_TWIN     = 3u,
+	PRIME_CHAIN_BI_TWIN     = 3u
 };
 // bool CheckPrimeProofOfWork(uint256 hashBlockHeader, unsigned int nBits, const CBigNum& bnPrimeChainMultiplier, unsigned int& nChainType, unsigned int& nChainLength);
 

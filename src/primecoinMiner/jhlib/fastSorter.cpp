@@ -1,4 +1,6 @@
-#include<Windows.h>
+//#include<Windows.h>
+#include <cstdlib>
+#include <cstring>
 #include"fastSorter.h"
 
 /*
@@ -37,7 +39,7 @@ void fastSorter_enlarge(fastSorter_t *f)
 	if( f->nodeCount )
 	{
 		// copy nodes
-		RtlCopyMemory(newNodeList, f->nodeList, sizeof(fastSorter_treeEntry_t)*f->nodeCount);
+		memcpy(newNodeList, f->nodeList, sizeof(fastSorter_treeEntry_t)*f->nodeCount);
 	}
 	// correct pointers (there is always at least the default element)
 	unsigned int cBias = (unsigned int)newNodeList - (unsigned int)f->nodeList;

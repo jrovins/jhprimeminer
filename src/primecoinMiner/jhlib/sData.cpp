@@ -225,7 +225,7 @@ bool sData_nextCategory(sData_t *sData)
 		{
 			// category beginns
 			sData->categoryDataOffset = stream_getSeek(sData->file);
-			sint32 catLen = min(1024, strlen(line)+1);
+			sint32 catLen = std::min<sint32>(1024, strlen(line)+1);
 			sData->categoryName = (char*)malloc(catLen);
 			// copy name
 			for(sint32 i=0; i<1023; i++) // 1kb is the name length limit

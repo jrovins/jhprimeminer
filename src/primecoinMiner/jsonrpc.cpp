@@ -1,4 +1,11 @@
 #include"global.h"
+#include <signal.h>
+
+#ifndef _WIN32
+typedef int SOCKET;
+typedef struct sockaddr_in SOCKADDR_IN;
+typedef struct sockaddr SOCKADDR;
+#endif
 
 SOCKET jsonRpc_openConnection(char *ip, int Port)
 {
@@ -52,7 +59,11 @@ void jsonRpc_processRequest(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 	{
 		// invalid json data
 		// kick the client
+#ifdef _WIN32
 		closesocket(client->clientSocket);
+#else
+	    close(client->clientSocket);
+#endif
 		client->clientSocket = 0;
 		client->disconnected = true;
 	}
@@ -75,17 +86,25 @@ void jsonRpc_processRequest(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 jsonRpcServer_t* jsonRpc_createServer(uint16 port)
 {
 	jsonRpcServer_t* jr = (jsonRpcServer_t*)malloc(sizeof(jsonRpcServer_t));
-	RtlZeroMemory(jr, sizeof(jsonRpcServer_t));
+	memset(jr, 0, sizeof(jsonRpcServer_t));
 	// open port for incoming connections
 	SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	SOCKADDR_IN addr;
 	memset(&addr,0,sizeof(SOCKADDR_IN));
 	addr.sin_family=AF_INET;
 	addr.sin_port=htons(port);
-	addr.sin_addr.s_addr=ADDR_ANY;
+	addr.sin_addr.s_addr=INADDR_ANY;
+#ifdef _WIN32 
 	if( bind(s,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN)) == SOCKET_ERROR )
+#else
+    if( bind(s, (SOCKADDR*)&addr,sizeof(SOCKADDR_IN)) == -1 )
+#endif
 	{
+#ifdef _WIN32
 		closesocket(s);
+#else
+	    close(s);
+#endif
 		free(jr);
 		return NULL;
 	}
@@ -104,14 +123,19 @@ void jsonRpcServer_newClient(jsonRpcServer_t* jrs, SOCKET s)
 {
 	// alloc client struct
 	jsonRpcClient_t* client = (jsonRpcClient_t*)malloc(sizeof(jsonRpcClient_t));
-	RtlZeroMemory(client, sizeof(jsonRpcClient_t));
+	memset(client, 0, sizeof(jsonRpcClient_t));
 	// init client
 	client->jsonRpcServer = jrs;
 	client->clientSocket = s;
 	// set socket as non-blocking
 	unsigned int nonblocking=1;
 	unsigned int cbRet;
+#ifdef _WIN32
 	WSAIoctl(s, FIONBIO, &nonblocking, sizeof(nonblocking), NULL, 0, (LPDWORD)&cbRet, NULL, NULL);
+#else
+  fcntl(s, F_SETFL, O_NONBLOCK);
+  //TODO: not sure what to do about the recv buffer passed to WSAIoctl here..
+#endif
 	// init recv buffer
 	client->recvIndex = 0;
 	client->recvSize = JSON_INITIAL_RECV_BUFFER_SIZE;
@@ -133,7 +157,7 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 		// try to enlarge buffer if allowed
 		if( client->recvSize < JSON_MAX_RECV_BUFFER_SIZE )
 		{
-			client->recvSize = min(client->recvSize*2, JSON_MAX_RECV_BUFFER_SIZE); // double buffer size
+			client->recvSize = std::min<unsigned long>(client->recvSize*2, JSON_MAX_RECV_BUFFER_SIZE); // double buffer size
 			client->recvBuffer = (uint8*)realloc(client->recvBuffer, client->recvSize);
 			// recalculate remaining buffer storage
 			remainingRecvSize = client->recvSize - client->recvIndex;
@@ -143,7 +167,11 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 			// evil client sends too much data
 			// disconnect
 			printf("JSON-RPC warning: Client tried to send more than 4MB of data\n");
+#ifdef _WIN32
 			closesocket(client->clientSocket);
+#else
+	        close(client->clientSocket);
+#endif
 			client->clientSocket = 0;
 			return false;
 		}
@@ -152,7 +180,11 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 	sint32 r = recv(client->clientSocket, (char*)(client->recvBuffer+client->recvIndex), remainingRecvSize, 0);
 	if( r <= 0 )
 	{
+#ifdef _WIN32
 		closesocket(client->clientSocket);
+#else
+	    close(client->clientSocket);
+#endif
 		client->clientSocket = 0;
 		return false;
 	}
@@ -164,9 +196,9 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 		{
 			// did we receive the end of the header already?
 			sint32 scanStart = (sint32)client->recvIndex - (sint32)r;
-			scanStart = max(scanStart-8, 0);
+			scanStart = std::max(scanStart-8, 0);
 			sint32 scanEnd = (sint32)(client->recvIndex);
-			scanEnd = max(scanEnd-4, 0);
+			scanEnd = std::max(scanEnd-4, 0);
 			for(sint32 s=scanStart; s<=scanEnd; s++)
 			{
 				// is header end?
@@ -178,7 +210,11 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 					if( s == 0 )
 					{
 						printf("JSON-RPC warning: Client sent headerless HTTP request\n");
+#ifdef _WIN32
 						closesocket(client->clientSocket);
+#else
+					    close(client->clientSocket);
+#endif
 						return false;
 					}
 					// reset some header related values
@@ -245,7 +281,11 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 					if( contentLength <= 0 )
 					{
 						printf("JSON-RPC warning: Content-Length header field not present\n");
+#ifdef _WIN32
 						closesocket(client->clientSocket);
+#else
+			            close(client->clientSocket);
+#endif
 						return false;
 					}
 					// mark header and packet size, then finish processing header
@@ -265,7 +305,11 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 			client->recvIndex -= client->recvDataSizeFull;
 			client->recvDataSizeFull = 0;
 			if( client->recvIndex > 0 )
+#ifdef _WIN32
 				__debugbreak(); // todo -> The client tried to send us more than one single request?
+#else
+		        raise(SIGTRAP);
+#endif
 		}
 	}
 	return true;
@@ -288,7 +332,7 @@ void jsonRpc_deleteClient(jsonRpcClient_t* client)
  */
 int jsonRpc_run(jsonRpcServer_t* jrs)
 {
-	FD_SET fd;
+	fd_set fd;
 	timeval sTimeout;
 	sTimeout.tv_sec = 1;
 	sTimeout.tv_usec = 0;
