@@ -1216,14 +1216,14 @@ int jhMiner_main_xptMode()
             printf("\nVal/h:%8f - PPS:%d - SPS:%.03f - ACC:%d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
             printf(" Chain/Hr: ");
 
-            for(int i=4; i<=8; i++)
+            for(int i=6; i<=10; i++)
 				{
                printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
 				}
-            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 9)
+            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 11)
             {
                printf("\n           ");
-               for(int i=9; i<=12; i++)
+               for(int i=11; i<=15; i++)
                {
                   printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
                }

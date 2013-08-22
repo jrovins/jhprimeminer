@@ -270,6 +270,8 @@ public:
    unsigned int nBits;
    unsigned int nPrimorialSeq;
    unsigned int nCandidateType;
+   unsigned int nTargetLength;
+   unsigned int nHalfTargetLength;
 
    // Results
    unsigned int nChainLength;
@@ -277,6 +279,8 @@ public:
    CPrimalityTestParams(unsigned int nBits, unsigned int nPrimorialSeq)
    {
       this->nBits = nBits;
+      this->nTargetLength = TargetGetLength(nBits);
+      this->nHalfTargetLength = nTargetLength / 2;
       this->nPrimorialSeq = nPrimorialSeq;
       nChainLength = 0;
       mpz_init(mpzE);
@@ -638,7 +642,7 @@ bool TargetGetNext(unsigned int nBits, int64 nInterval, int64 nTargetSpacing, in
 // Return value:
 //   true - Probable Cunningham Chain found (length at least 2)
 //   false - Not Cunningham Chain
-static bool ProbableCunninghamChainTestFast(const mpz_class& n, bool fSophieGermain, bool fFermatTest, unsigned int& nProbableChainLength, CPrimalityTestParams& testParams)
+static bool ProbableCunninghamChainTestFast(const mpz_class& n, const bool fSophieGermain, const bool fFermatTest, unsigned int& nProbableChainLength, CPrimalityTestParams& testParams, bool fBiTwinTest)
 {
    nProbableChainLength = 0;
 
@@ -646,14 +650,61 @@ static bool ProbableCunninghamChainTestFast(const mpz_class& n, bool fSophieGerm
    if (!FermatProbablePrimalityTestFast(n, nProbableChainLength, testParams, true, true))
       return false;
 
-   // Euler-Lagrange-Lifchitz test for the following numbers in chain
+   const int chainIncremental = (fSophieGermain? 1 : (-1));
+
+   // Get prime origin.
    mpz_class &N = testParams.N;
+   mpz_class M = n;
    N = n;
+
+   // Get target depth to check.
+   unsigned int quickTargetCheck = (!fBiTwinTest) ? testParams.nTargetLength : testParams.nHalfTargetLength;
+   M = (M + chainIncremental) * (1 << (quickTargetCheck - 2)) - chainIncremental;
+   //if (!fBiTwinTest) printf("Target-1: %s\n", M.get_str(16).c_str());
+   // If this target fails we don't have a valid candidate, go no further.
+   if (!FermatProbablePrimalityTestFast(M, nProbableChainLength, testParams, false, true))
+   {
+      return false;
+   }
+   else
+   {
+      M <<= 1;
+      M += chainIncremental;
+      //if (!fBiTwinTest) printf("Target  : %s\n", M.get_str(16).c_str());
+      if (!FermatProbablePrimalityTestFast(M, nProbableChainLength, testParams, false, true))
+      {
+         return false;
+      }
+   }
+
+   // Euler-Lagrange-Lifchitz test for the following numbers in chain
+   unsigned int currentLength = 0;
+   //N = n;
    while (true)
    {
       TargetIncrementLength(nProbableChainLength);
       N <<= 1;
-      N += (fSophieGermain? 1 : (-1));
+      N += chainIncremental;
+      // printf("Step %u: %s\n",currentLength, N.get_str(10).c_str());
+      currentLength++;
+
+      //if ((M == N) && (!fBiTwinTest))
+      //{
+      //      printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
+      //      int z= 0;
+      //}
+      if (currentLength == quickTargetCheck - 2)
+      {
+         //if (quickTargetCheck == testParams.nTargetLength) 
+         //   printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
+         continue; // We already proved this length is valid.
+      }
+      if (currentLength == quickTargetCheck - 1)
+      {
+         //if (quickTargetCheck == testParams.nTargetLength)
+         //   printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
+         continue; // We already proved this length is valid.
+      }
       if (fFermatTest)
       {
          if (!FermatProbablePrimalityTestFast(N, nProbableChainLength, testParams))
@@ -666,7 +717,7 @@ static bool ProbableCunninghamChainTestFast(const mpz_class& n, bool fSophieGerm
       }
    }
 
-   return (TargetGetLength(nProbableChainLength) >= 2);
+   return (currentLength >= 2);
 }
 
 // Test Probable Cunningham Chain for: n
@@ -782,23 +833,23 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
    if (nCandidateType == PRIME_CHAIN_CUNNINGHAM1)
    {
       mpzOriginMinusOne = mpzPrimeChainOrigin - 1;
-      ProbableCunninghamChainTestFast(mpzOriginMinusOne, true, false, nChainLength, testParams);
+      ProbableCunninghamChainTestFast(mpzOriginMinusOne, true, false, nChainLength, testParams, false);
    }
    else if (nCandidateType == PRIME_CHAIN_CUNNINGHAM2)
    {
       // Test for Cunningham Chain of second kind
       mpzOriginPlusOne = mpzPrimeChainOrigin + 1;
-      ProbableCunninghamChainTestFast(mpzOriginPlusOne, false, false, nChainLength, testParams);
+      ProbableCunninghamChainTestFast(mpzOriginPlusOne, false, false, nChainLength, testParams, false);
    }
    else
    {
       unsigned int nChainLengthCunningham1 = 0;
       unsigned int nChainLengthCunningham2 = 0;
       mpzOriginMinusOne = mpzPrimeChainOrigin - 1;
-      if (ProbableCunninghamChainTestFast(mpzOriginMinusOne, true, false, nChainLengthCunningham1, testParams))
+      if (ProbableCunninghamChainTestFast(mpzOriginMinusOne, true, false, nChainLengthCunningham1, testParams, true))
       {
          mpzOriginPlusOne = mpzPrimeChainOrigin + 1;
-         ProbableCunninghamChainTestFast(mpzOriginPlusOne, false, false, nChainLengthCunningham2, testParams);
+         ProbableCunninghamChainTestFast(mpzOriginPlusOne, false, false, nChainLengthCunningham2, testParams, true);
 
          // Figure out BiTwin Chain length
          // BiTwin Chain allows a single prime at the end for odd length chain
@@ -838,11 +889,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       lSieveTarget = nOverrideTargetValue;
    else
       lSieveTarget = TargetGetLength(block->nBits);
-      // If Difficulty gets within 1/30th of next target length, its actually more efficent to
-      // increase the target length.. While technically worse for share val/hr - this should
-      // help block rate.
-      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 1.0f / 30))
-         lSieveTarget++;
+   // If Difficulty gets within 1/30th of next target length, its actually more efficent to
+   // increase the target length.. While technically worse for share val/hr - this should
+   // help block rate.
+   if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 1.0f / 30))
+      lSieveTarget++;
 
    if (nOverrideBTTargetValue > 0)
       lSieveBTTarget = nOverrideBTTargetValue;
@@ -963,14 +1014,14 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          continue;
       }
 
-      if (shareDifficultyMajor >= 3)
+      if (shareDifficultyMajor >= 6)
       {				
          //if (!sieveRescan)
          //{				
          primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
          primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
-            primeStats.nChainHit++;
+         //if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
+         primeStats.nChainHit++;
          //}
          // do a 100% rescan of the sieve for higer shares
          //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
