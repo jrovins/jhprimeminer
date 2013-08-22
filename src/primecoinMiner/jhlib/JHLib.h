@@ -107,11 +107,11 @@ void _ex2_analyzeMemoryLog();
 #include"fMath.h"
 #include"sData.h"
 #endif
-/*#include"fastSorter.h"
+#include"fastSorter.h"
 #include"fileMgr.h"
 #include"bmp.h"
 #include"tgaLib.h"
-#include"msgQueue.h"*/
+#include"msgQueue.h"
 #include"packetBuffer.h"
 #include"simpleList.h"
 #include"customBuffer.h"

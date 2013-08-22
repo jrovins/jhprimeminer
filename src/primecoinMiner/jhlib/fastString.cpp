@@ -1,6 +1,8 @@
 #include"./JHLib.h"
 #include<stdio.h>
+#ifndef _WIN32
 #include <cstdlib>
+#endif
 
 // local variables
 extern fStr_format_t fStr_formatInfo_ASCII;

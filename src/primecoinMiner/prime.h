@@ -93,7 +93,7 @@ bool TargetSetFractionalDifficulty(uint64 nFractionalDifficulty, unsigned int& n
 std::string TargetToString(unsigned int nBits);
 unsigned int TargetFromInt(unsigned int nLength);
 bool TargetGetMint(unsigned int nBits, uint64& nMint);
-bool TargetGetNext(unsigned int nBits, uint64_t nInterval, uint64_t nTargetSpacing, uint64_t nActualSpacing, unsigned int& nBitsNext);
+bool TargetGetNext(unsigned int nBits, uint64_t nInterval, uint64_t nTargetSpacing, uint64 nActualSpacing, unsigned int& nBitsNext);
 
 // Mine probable prime chain of form: n = h * p# +/- 1
 //bool MineProbablePrimeChain(CBlock& block, CBigNum& bnFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, unsigned int& nTests, unsigned int& nPrimesHit);

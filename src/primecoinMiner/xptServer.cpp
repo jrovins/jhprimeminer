@@ -51,9 +51,9 @@ xptServerClient_t* xptServer_newClient(xptServer_t* xptServer, SOCKET s)
 	xptServerClient->packetbuffer = xptPacketbuffer_create(4*1024); // 4kb
 	xptServerClient->xptServer = xptServer;
 	// set socket as non-blocking
+#ifdef _WIN32
 	unsigned int nonblocking=1;
 	unsigned int cbRet;
-#ifdef _WIN32
 	WSAIoctl(s, FIONBIO, &nonblocking, sizeof(nonblocking), NULL, 0, (LPDWORD)&cbRet, NULL, NULL);
 #else
 	int flags, err;
@@ -84,7 +84,7 @@ bool xptServer_processPacket(xptServer_t* xptServer, xptServerClient_t* xptServe
  */
 bool xptServer_receiveData(xptServer_t* xptServer, xptServerClient_t* xptServerClient)
 {
-	sint32 packetFullSize = 4; // the packet always has at least the size of the header
+	uint32 packetFullSize = 4; // the packet always has at least the size of the header
 	if( xptServerClient->recvSize > 0 )
 		packetFullSize += xptServerClient->recvSize;
 	sint32 bytesToReceive = (sint32)(packetFullSize - xptServerClient->recvIndex);
@@ -134,7 +134,7 @@ bool xptServer_receiveData(xptServer_t* xptServer, xptServerClient_t* xptServerC
  * Deletes the client and frees the associated client data
  * Note that this method should never be called directly, if you want to disconnect a client - set xptServerClient->disconnected = true
  */
-void xptServer_deleteClient(xptServer_t* xptServer, xptServerClient_t* xptServerClient)
+void xptServer_deleteClient(xptServerClient_t* xptServerClient)
 {
 	if( xptServerClient->packetbuffer )
 		xptPacketbuffer_free(xptServerClient->packetbuffer);
@@ -163,7 +163,7 @@ void xptServer_sendNewBlockToAll(xptServer_t* xptServer, uint32 coinTypeIndex)
 		payloadCount += xptServerClient->payloadNum;
 	}
 	uint64 time2 = getTimeMilliseconds() - time1;
-	printf("Send %d blocks to %d workers in %dms\n", payloadCount, workerCount, time2);
+	printf("Send %d blocks to %d workers in %ums\n", payloadCount, workerCount, time2);
 }
 
 /*
@@ -240,7 +240,7 @@ void xptServer_startProcessing(xptServer_t* xptServer)
 						client->clientSocket = 0;
 					}
 					// delete client
-					xptServer_deleteClient(xptServer, client);
+					xptServer_deleteClient(client);
 					// remove from list
 					xptServer->list_connections->objects[i] = xptServer->list_connections->objects[xptServer->list_connections->objectCount-1];
 					xptServer->list_connections->objectCount--;

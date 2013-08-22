@@ -302,7 +302,9 @@ public:
 // Check Fermat probable primality test (2-PRP): 2 ** (n-1) = 1 (mod n)
 // true: n is probable prime
 // false: n is composite; set fractional length in the nLength output
-static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastDiv = false, bool fFastFail = false)
+//static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastDiv = false, bool fFastFail = false)
+static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastFail = false)
+
 {
    // Faster GMP version
    mpz_t& mpzE = testParams.mpzE;
@@ -653,8 +655,9 @@ static bool ProbableCunninghamChainTestFast(const mpz_class& n, bool fSophieGerm
    nProbableChainLength = 0;
 
    // Fermat test for n first
-   if (!FermatProbablePrimalityTestFast(n, nProbableChainLength, testParams, true, true))
-      return false;
+//   if (!FermatProbablePrimalityTestFast(n, nProbableChainLength, testParams, true, true))
+     if (!FermatProbablePrimalityTestFast(n, nProbableChainLength, testParams, true))
+     return false;
 
    // Euler-Lagrange-Lifchitz test for the following numbers in chain
    mpz_class &N = testParams.N;
@@ -1505,7 +1508,7 @@ bool CSieveOfEratosthenes::Weave()
    // Faster GMP version
    uint64 start = getTimeMilliseconds(); 
    // Keep all variables local for max performance
-   const unsigned int nChainLength = this->nChainLength;
+//   const unsigned int nChainLength = this->nChainLength;  unused?
    const unsigned int nBTChainLength = this->nBTChainLength;
    const unsigned int nCCChainLength = this->nCCChainLength;
    const unsigned int nBTDoubleChainLength = this->nBTChainLength * 2;

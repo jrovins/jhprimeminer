@@ -270,7 +270,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
 			{
 				total_shares++;
 				// the server says no to this share :(
-				printf("Server rejected share (BlockHeight: %lu/%lu nBits: 0x%08luX)\n", primecoinBlock->serverData.blockHeight, jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex), primecoinBlock->serverData.client_shareBits);
+				printf("Server rejected share (BlockHeight: %u/%u nBits: 0x%08uX)\n", primecoinBlock->serverData.blockHeight, jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex), primecoinBlock->serverData.client_shareBits);
 				jsonObject_freeObject(jsonReturnValue);
 				return false;
 			}
@@ -297,11 +297,14 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
 		memcpy(xptShareToSubmit->chainMultiplier, &bnSerializeData[0], lengthBN);
 		xptShareToSubmit->chainMultiplierSize = lengthBN;
 		// todo: Set stuff like sieve size
-		if( workData.xptClient && !workData.xptClient->disconnected)
+		if( workData.xptClient && !workData.xptClient->disconnected){
 			xptClient_foundShare(workData.xptClient, xptShareToSubmit);
+			return true;
+		}
 		else
 		{
 			printf("Share submission failed. The client is not connected to the pool.\n");
+			return false;
 		}
 
 	}
@@ -329,6 +332,7 @@ int queryLocalPrimecoindBlockCount(bool useLocal)
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 static const uint64_t diffone = 0xFFFF000000000000ull;
 
+#ifdef _WIN32
 static double target_diff(const unsigned char *target)
 {
 	double targ = 0;
@@ -339,7 +343,7 @@ static double target_diff(const unsigned char *target)
 
 	return DIFFEXACTONE / (targ ? targ: 1);
 }
-
+#endif
 
 //static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 //static const uint64_t diffone = 0xFFFF000000000000ull;
@@ -366,30 +370,22 @@ std::string HexBits(unsigned int nBits)
     return HexStr(BEGIN(uBits.cBits), END(uBits.cBits));
 }
 
+#ifdef _WIN32
 static bool IsXptClientConnected()
 {
-#ifdef _WIN32
 	__try
-#else
-	try
-#endif
 	{
 		if (workData.xptClient == NULL || workData.xptClient->disconnected)
 			return false;
-
 	}
-#ifdef _WIN32
 	__except(EXCEPTION_EXECUTE_HANDLER)
-#else
-	catch(...)
-#endif
 	{
 		return false;
 	}
 
 	return true;
-
 }
+#endif
 
 
 void jhMiner_queryWork_primecoin()
@@ -410,7 +406,7 @@ void jhMiner_queryWork_primecoin()
 		jsonObject_t* jsonResult = jsonObject_getParameter(jsonReturnValue, "result");
 		jsonObject_t* jsonResult_data = jsonObject_getParameter(jsonResult, "data");
 		//jsonObject_t* jsonResult_hash1 = jsonObject_getParameter(jsonResult, "hash1");
-		jsonObject_t* jsonResult_target = jsonObject_getParameter(jsonResult, "target");
+//		jsonObject_t* jsonResult_target = jsonObject_getParameter(jsonResult, "target");   unused?
 		jsonObject_t* jsonResult_serverData = jsonObject_getParameter(jsonResult, "serverData");
 		//jsonObject_t* jsonResult_algorithm = jsonObject_getParameter(jsonResult, "algorithm");
 		if( jsonResult_data == NULL )
@@ -480,7 +476,7 @@ void* jhMiner_workerThread_getwork(void *arg)
 	{
 		uint8 localBlockData[128];
 		// copy block data from global workData
-		uint32 workDataHash = 0;
+//		uint32 workDataHash = 0;  unused?
 		uint8 serverData[32];
 		while( workData.workEntry[0].dataIsValid == false ) Sleep(200);
 #ifdef _WIN32
@@ -613,7 +609,7 @@ void jhMiner_printHelp()
 	puts("   jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4");
 #ifdef _WIN32
 	puts("Press any key to continue...");
-	_getch();
+	getchar();
 #endif
 }
 
@@ -983,7 +979,7 @@ void *AutoTuningWorkerThread(void * arg)
 	#ifndef _WIN32
   bool bEnabled = static_cast<bool>((uintptr_t)arg);
 	#endif
-	uint64 startTime = getTimeMilliseconds();
+//	uint64 startTime = getTimeMilliseconds();  unused?
 	
 	unsigned int nL1CacheElementsStart = 8 * sizeof(unsigned long) * 1000;
 	unsigned int nL1CacheElementsMax   = 2000000;
@@ -1005,7 +1001,7 @@ void *AutoTuningWorkerThread(void * arg)
 		primeStats.nTestTime = 0;
 		primeStats.nTestRound = 0;
 		Sleep(nSampleSeconds*1000);
-		uint32_t waveTime = primeStats.nWaveTime;
+//		uint32_t waveTime = primeStats.nWaveTime;  unused?
 
 		if (bOptimalL1Search && nCounter >=1)
 		{
@@ -1114,8 +1110,6 @@ void PrintCurrentSettings()
 
 
 
-bool appQuitSignal = false;
-
 #ifdef _WIN32
 static void input_thread()
 #else
@@ -1126,8 +1120,6 @@ void *input_thread(void *)
 		int input = getchar();
 		switch (input) {
 		case 'q': case 'Q': case 3: //case 27:
-			appQuitSignal = true;
-			Sleep(3200);
 			std::exit(0);
 #ifdef _WIN32
 			return;
@@ -1272,7 +1264,7 @@ int jhMiner_main_xptMode()
 {
 	#ifdef _WIN32
 	// start the Auto Tuning thread
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)AutoTuningWorkerThread, (LPVOID)true, 0, 0);
+	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)AutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
 	// start threads
 	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
@@ -1283,9 +1275,8 @@ int jhMiner_main_xptMode()
 #else
  uint32_t totalThreads = commandlineInput.numThreads + 2;
   pthread_t threads[totalThreads];
-  const bool enabled = true;
   // start the Auto Tuning thread
-  pthread_create(&threads[commandlineInput.numThreads], NULL, AutoTuningWorkerThread, (void *)&enabled);
+  pthread_create(&threads[commandlineInput.numThreads], NULL, AutoTuningWorkerThread, (void *)&commandlineInput.enableCacheTunning);
   pthread_create(&threads[commandlineInput.numThreads+1], NULL, input_thread, NULL);
   pthread_attr_t threadAttr;
   pthread_attr_init(&threadAttr);
@@ -1295,7 +1286,7 @@ int jhMiner_main_xptMode()
   pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_DETACHED);
   
   // start threads
-	for(uint32_t threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
+	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
   {
 	pthread_create(&threads[threadIdx], 
                    &threadAttr, 
@@ -1424,13 +1415,13 @@ int jhMiner_main_xptMode()
 				}
 				if (workData.xptClient->blockWorkInfo.height > 0)
 				{
-					double totalRunTime = (double)(getTimeMilliseconds() - primeStats.startTime);
+//					double totalRunTime = (double)(getTimeMilliseconds() - primeStats.startTime);  unused?
 					double statsPassedTime = (double)(getTimeMilliseconds() - primeStats.primeLastUpdate);
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
 					double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
 					double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
                printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-               printf("New Block: %lu - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
+               printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
                printf("Total/Valid shares: [ %d / %d ]  -  Max diff: %.06f\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
                statsPassedTime = (double)(getTimeMilliseconds() - primeStats.blockStartTime);
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
@@ -1596,7 +1587,7 @@ int main(int argc, char **argv)
 	primeStats.shareRejected = false;
 	primeStats.primeChainsFound = 0;
 	primeStats.foundShareCount = 0;
-   for(int i = 0; i < sizeof(primeStats.chainCounter[0])/sizeof(uint32);  i++)
+   for(uint32 i = 0; i < sizeof(primeStats.chainCounter[0])/sizeof(uint32);  i++)
    {
       primeStats.chainCounter[0][i] = 0;
       primeStats.chainCounter[1][i] = 0;

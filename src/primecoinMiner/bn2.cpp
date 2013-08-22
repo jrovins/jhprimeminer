@@ -108,6 +108,36 @@ int inline BN2_is_bit_set(const BIGNUM *a, int n)
 	return (int)(((a->d[i])>>j)&((BN_ULONG)1));
 }
 
+#ifndef _WIN32
+#ifdef __GNUC__
+#define clz(x) __builtin_clz(x)
+#define ctz(x) __builtin_ctz(x)
+#else
+static uint32_t ALWAYS_INLINE popcnt( uint32_t x )
+{
+    x -= ((x >> 1) & 0x55555555);
+    x = (((x >> 2) & 0x33333333) + (x & 0x33333333));
+    x = (((x >> 4) + x) & 0x0f0f0f0f);
+    x += (x >> 8);
+    x += (x >> 16);
+    return x & 0x0000003f;
+}
+//static uint32_t ALWAYS_INLINE clz( uint32_t x )
+//{
+//    x |= (x >> 1);
+//    x |= (x >> 2);
+//    x |= (x >> 4);
+//    x |= (x >> 8);
+//    x |= (x >> 16);
+//    return 32 - popcnt(x);
+//}
+static uint32_t ALWAYS_INLINE ctz( uint32_t x )
+{
+    return popcnt((x & -x) - 1);
+}
+
+#endif
+#endif
 /*
  * Counts the number of set bits starting at a value of 1 then 2, 4, 8, 16...
  * If a bit is not set, the method exits and returns the number of bits up to this bit
@@ -115,13 +145,16 @@ int inline BN2_is_bit_set(const BIGNUM *a, int n)
  */
 int inline BN2_nz_num_unset_bits_from_lsb(const BIGNUM *a)
 {
-#ifdef _WIN32
 	sint32 bIdx = 0;
-	uint32 idx = 0;
+	unsigned long idx = 0;
 	sint32 maxIdx = a->top-1;
 	do 
 	{
+#ifdef _WIN32
 		_BitScanForward(&idx, a->d[bIdx]);
+#else
+		idx = ctz(a->d[bIdx]);
+#endif
 		if( idx==0 )
 		{
 			if( bIdx >= maxIdx )
@@ -132,12 +165,8 @@ int inline BN2_nz_num_unset_bits_from_lsb(const BIGNUM *a)
 			break;
 	}while(true);
 	return bIdx*32+idx;
-	// _BitScanReverse
-#else
-#include <signal.h>
-	// NOT IMPLEMENTED
-  return -1;
-#endif
+	// _BitScanReverse - win32
+	// clz - gcc
 }
 
 
@@ -192,7 +221,7 @@ int BN2_sub(BIGNUM *r, const BIGNUM *a, const BIGNUM *b)
 	return(1);
 }
 
-int BN2_nnmod(BIGNUM *r, const BIGNUM *m, const BIGNUM *d, BN_CTX *ctx)
+int BN2_nnmod(BIGNUM *r, const BIGNUM *m, const BIGNUM *d)
 {
 	/* like BN_mod, but returns non-negative remainder
 	* (i.e.,  0 <= r < |d|  always holds) */
@@ -461,7 +490,7 @@ BIGNUM *BN2_mod_inverse(BIGNUM *in,
 	A->neg = 0;
 	if (B->neg || (BN_ucmp(B, A) >= 0))
 	{
-		if (!BN2_nnmod(B, B, A, ctx)) goto err;
+		if (!BN2_nnmod(B, B, A)) goto err;
 	}
 	sign = -1;
 	/* From  B = a mod |n|,  A = |n|  it follows that
@@ -697,7 +726,7 @@ BIGNUM *BN2_mod_inverse(BIGNUM *in,
 		}
 		else
 		{
-			if (!BN2_nnmod(R,Y,n,ctx)) goto err;
+			if (!BN2_nnmod(R,Y,n)) goto err;
 		}
 	}
 	else

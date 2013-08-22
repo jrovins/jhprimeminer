@@ -126,7 +126,7 @@ int esprintf_hf(char *out, float valueF, int padRight, int padZero, int width)
 {
 	char* outInitial = out;
 	sint32 value = (sint32)floor(valueF);
-	int c = 0;
+//	int c = 0;   unused?
 	char DezimalStr[32];
 	int dl = 0; //DezimalLength
 	int negative = 0;

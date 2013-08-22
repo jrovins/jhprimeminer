@@ -1,6 +1,9 @@
-//#include<Windows.h>
+#ifdef _WIN32
+#include<Windows.h>
+#else
 #include <cstdlib>
 #include <cstring>
+#endif
 #include"fastSorter.h"
 
 /*

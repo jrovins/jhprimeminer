@@ -69,7 +69,7 @@ void simpleList_add(simpleList_t* simpleList, void* object) // todo: Via define 
 // does not add the object if it is already in the list
 void simpleList_addUnique(simpleList_t* simpleList, void* object)
 {
-	for(sint32 i=0; i<simpleList->objectCount; i++)
+	for(uint32 i=0; i<simpleList->objectCount; i++)
 	{
 		if( simpleList->objects[i] == object )
 			return;
@@ -95,7 +95,7 @@ void simpleList_addUnique(simpleList_t* simpleList, void* object)
 // does not add the object if it is already in the list and returns true if it was added
 bool simpleList_addUniqueFeedback(simpleList_t* simpleList, void* object)
 {
-	for(sint32 i=0; i<simpleList->objectCount; i++)
+	for(uint32 i=0; i<simpleList->objectCount; i++)
 	{
 		if( simpleList->objects[i] == object )
 			return false;
@@ -122,7 +122,7 @@ bool simpleList_addUniqueFeedback(simpleList_t* simpleList, void* object)
 // Never call _remove while parsing through the list!
 bool simpleList_remove(simpleList_t* simpleList, void* object)
 {
-	for(sint32 i=0; i<simpleList->objectCount; i++)
+	for(uint32 i=0; i<simpleList->objectCount; i++)
 	{
 		if( simpleList->objects[i] == object )
 		{
@@ -192,7 +192,7 @@ void simpleListCached_add(simpleListCached_t* simpleListCached, void* object) //
 // does not add the object if it is already in the list
 void simpleListCached_addUnique(simpleListCached_t* simpleListCached, void* object)
 {
-	for(sint32 i=0; i<simpleListCached->objectCount; i++)
+	for(uint32 i=0; i<simpleListCached->objectCount; i++)
 	{
 		if( simpleListCached->objects[i] == object )
 			return;
@@ -218,7 +218,7 @@ void simpleListCached_addUnique(simpleListCached_t* simpleListCached, void* obje
 // does not add the object if it is already in the list and returns true if it was added
 bool simpleListCached_addUniqueFeedback(simpleListCached_t* simpleListCached, void* object)
 {
-	for(sint32 i=0; i<simpleListCached->objectCount; i++)
+	for(uint32 i=0; i<simpleListCached->objectCount; i++)
 	{
 		if( simpleListCached->objects[i] == object )
 			return false;
@@ -245,7 +245,7 @@ bool simpleListCached_addUniqueFeedback(simpleListCached_t* simpleListCached, vo
 // Never call _remove while parsing through the list!
 bool simpleListCached_remove(simpleListCached_t* simpleListCached, void* object)
 {
-	for(sint32 i=0; i<simpleListCached->objectCount; i++)
+	for(uint32 i=0; i<simpleListCached->objectCount; i++)
 	{
 		if( simpleListCached->objects[i] == object )
 		{

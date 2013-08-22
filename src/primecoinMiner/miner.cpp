@@ -17,17 +17,17 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		pctx = BN_CTX_new();
 	// Each thread has its own key and counter
 	//CReserveKey reservekey(pwallet);
-	unsigned int nExtraNonce = 0;
+//	unsigned int nExtraNonce = 0;  unused?
 
 	static const unsigned int nPrimorialHashFactor = 7;
-	const unsigned int nPrimorialMultiplierStart = 61;   
-	const unsigned int nPrimorialMultiplierMax = 79;
+//	const unsigned int nPrimorialMultiplierStart = 61;   unused?
+//	const unsigned int nPrimorialMultiplierMax = 79;  unused?
 
 	unsigned int nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-	uint64_t nTimeExpected = 0;   // time expected to prime chain (micro-second)
-	uint64_t nTimeExpectedPrev = 0; // time expected to prime chain last time
-	bool fIncrementPrimorial = true; // increase or decrease primorial factor
-	uint64_t nSieveGenTime = 0;
+//	uint64_t nTimeExpected = 0;   // time expected to prime chain (micro-second)   unused?
+//	uint64_t nTimeExpectedPrev = 0; // time expected to prime chain last time   unused?
+//	bool fIncrementPrimorial = true; // increase or decrease primorial factor   unused?
+//	uint64_t nSieveGenTime = 0;   unused?
 	
 
 	CSieveOfEratosthenes* psieve = NULL;
@@ -39,7 +39,7 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 	//primecoinBlock->nonce = 0;
 
 	uint64 nTime = getTimeMilliseconds() + 1000*600;
-	uint64 nStatTime = getTimeMilliseconds() + 2000;
+//	uint64 nStatTime = getTimeMilliseconds() + 2000;  unused?
 	
 	// note: originally a wanted to loop as long as (primecoinBlock->workDataHash != jhMiner_getCurrentWorkHash()) did not happen
 	//		 but I noticed it might be smarter to just check if the blockHeight has changed, since that is what is really important
@@ -51,7 +51,7 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	time_t unixTimeStart;
 	time(&unixTimeStart);
-	uint32 nTimeRollStart = primecoinBlock->timestamp;
+//	uint32 nTimeRollStart = primecoinBlock->timestamp;   unused?
 
 	//uint32 nCurrentTick = GetTickCount();
 
@@ -101,7 +101,7 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		mpz_class mpzPrimorial;
 		unsigned int nRoundTests = 0;
 		unsigned int nRoundPrimesHit = 0;
-		uint64 nPrimeTimerStart = getTimeMilliseconds();
+//		uint64 nPrimeTimerStart = getTimeMilliseconds();   unused?
 		
 		//if( loopCount > 0 )
 		//{

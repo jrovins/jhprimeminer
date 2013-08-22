@@ -105,8 +105,8 @@ void xptClient_free(xptClient_t* xptClient)
  */
 void xptClient_sendWorkerLogin(xptClient_t* xptClient)
 {
-	uint32 usernameLength = std::min(127, fStrLen(xptClient->username));
-	uint32 passwordLength = std::min(127, fStrLen(xptClient->password));
+//	uint32 usernameLength = std::min(127, fStrLen(xptClient->username));   unused?
+//	uint32 passwordLength = std::min(127, fStrLen(xptClient->password));   unused?
 	// build the packet
 	bool sendError = false;
 	xptPacketbuffer_beginWritePacket(xptClient->sendBuffer, XPT_OPC_C_AUTH_REQ);
@@ -198,12 +198,12 @@ bool xptClient_process(xptClient_t* xptClient)
   pthread_mutex_unlock(&xptClient->cs_shareSubmit);
 #endif
 	// check for packets
-	sint32 packetFullSize = 4; // the packet always has at least the size of the header
+	uint32 packetFullSize = 4; // the packet always has at least the size of the header
 	if( xptClient->recvSize > 0 )
 		packetFullSize += xptClient->recvSize;
-	sint32 bytesToReceive = (sint32)(packetFullSize - xptClient->recvIndex);
+	uint32 bytesToReceive = (uint32)(packetFullSize - xptClient->recvIndex);
 	// packet buffer is always large enough at this point
-	ssize_t r = recv(xptClient->clientSocket, (char*)(xptClient->recvBuffer->buffer+xptClient->recvIndex), bytesToReceive, 0);
+	int r = recv(xptClient->clientSocket, (char*)(xptClient->recvBuffer->buffer+xptClient->recvIndex), bytesToReceive, 0);
 	if( r <= 0 )
 	{
 #ifdef _WIN32

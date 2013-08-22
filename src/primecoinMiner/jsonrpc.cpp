@@ -35,7 +35,7 @@ void jsonRpc_processRequest(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 	jsonObject_t* jsonObject = jsonParser_parse((uint8*)requestData, requestLength);
 	// get method
 	jsonObject_t* jsonMethodName = jsonObject_getParameter(jsonObject, "method");
-	jsonObject_t* jsonParameter = jsonObject_getParameter(jsonObject, "params");
+//	jsonObject_t* jsonParameter = jsonObject_getParameter(jsonObject, "params");  unused?
 
 	uint32 methodNameLength = 0;
 	uint8* methodNameString = jsonObject_getStringData(jsonMethodName, &methodNameLength);
@@ -128,9 +128,9 @@ void jsonRpcServer_newClient(jsonRpcServer_t* jrs, SOCKET s)
 	client->jsonRpcServer = jrs;
 	client->clientSocket = s;
 	// set socket as non-blocking
+#ifdef _WIN32
 	unsigned int nonblocking=1;
 	unsigned int cbRet;
-#ifdef _WIN32
 	WSAIoctl(s, FIONBIO, &nonblocking, sizeof(nonblocking), NULL, 0, (LPDWORD)&cbRet, NULL, NULL);
 #else
   fcntl(s, F_SETFL, O_NONBLOCK);
@@ -301,7 +301,7 @@ bool jsonRpcServer_receiveData(jsonRpcServer_t* jrs, jsonRpcClient_t* client)
 			jsonRpc_processRequest(jrs, client);
 			// wipe processed packet and shift remaining data back
 			client->recvDataHeaderEnd = 0;
-			uint32 pRecvIndex = client->recvIndex;
+//			uint32 pRecvIndex = client->recvIndex;   unused?
 			client->recvIndex -= client->recvDataSizeFull;
 			client->recvDataSizeFull = 0;
 			if( client->recvIndex > 0 )

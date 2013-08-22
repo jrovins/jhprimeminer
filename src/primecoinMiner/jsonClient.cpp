@@ -143,7 +143,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	}
 
 	//uint32 startTime = GetTickCount(); // todo: Replace with crossplatform method
-  uint64 startTime = getTimeMilliseconds();
+//  uint64 startTime = getTimeMilliseconds();   unused
 	// build json request data
 	// example: {"method": "getwork", "params": [], "id":0}
 	fStr_t* fStr_jsonRequestData = fStr_alloc(1024*512); // 64KB (this is also used as the recv buffer!)
@@ -215,7 +215,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		{
 			//uint32 passedTime = GetTickCount() - startTime;
       uint64 passedTime = getTimeMilliseconds();
-			printf("JSON request timed out after %dms\n", passedTime);
+			printf("JSON request timed out after %lums\n", passedTime);
     
 			break;
 		}
@@ -224,7 +224,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 			printf("JSON receive error\n");
 			break;
 		}
-		ssize_t r = recv(serverSocket, (char*)(recvBuffer+recvIndex), remainingRecvSize, 0);
+		int32_t r = recv(serverSocket, (char*)(recvBuffer+recvIndex), remainingRecvSize, 0);
 		if( r <= 0 )
 		{
 			// client closed connection

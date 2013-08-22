@@ -10,7 +10,7 @@ jsonObject_t* jsonObject_getParameter(jsonObject_t* jsonObject, char* name)
 	if( jsonObject->type != JSON_TYPE_OBJECT )
 		return NULL;
 	jsonObjectRawObject_t* jsonObjectRawObject = (jsonObjectRawObject_t*)jsonObject;
-	sint32 strLen = fStrLen(name);
+	uint32 strLen = fStrLen(name);
 	for(uint32 i=0; i<jsonObjectRawObject->list_paramPairs->objectCount; i++)
 	{
 		jsonObjectRawObjectParameter_t* objParam = (jsonObjectRawObjectParameter_t*)customBuffer_get(jsonObjectRawObject->list_paramPairs, i);

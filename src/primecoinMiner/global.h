@@ -5,6 +5,24 @@
 #pragma comment(lib,"Ws2_32.lib")
 #include<Winsock2.h>
 #include<ws2tcpip.h>
+typedef __int64           sint64;
+typedef unsigned __int64  uint64;
+typedef __int32           sint32;
+typedef unsigned __int32  uint32;
+typedef __int16           sint16;
+typedef unsigned __int16  uint16;
+typedef __int8            sint8;
+typedef unsigned __int8   uint8;
+
+typedef __int8 int8_t;
+typedef unsigned __int8 uint8_t;
+typedef __int16 int16_t;
+typedef unsigned __int16 uint16_t;
+typedef __int32 int32_t;
+typedef unsigned __int32 uint32_t;
+typedef __int64 int64_t;
+typedef unsigned __int64 uint64_t;
+
 #else
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -27,6 +45,7 @@ typedef uint32_t DWORD;
 #include<stdio.h>
 #include<time.h>
 #include<set>
+#include<stdint.h>
 
 #include"sha256.h"
 #include"ripemd160.h"

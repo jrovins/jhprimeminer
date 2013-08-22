@@ -81,6 +81,9 @@
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\Microsoft SDKs\Windows\v7.1\include;$(IncludePath)</IncludePath>
+    <ExecutablePath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\x64;$(ExecutablePath)</ExecutablePath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\Microsoft SDKs\Windows\v7.1\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -105,12 +108,13 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>.\includes\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\includes\;$(WindowsSdkDir)\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4800;4244;4267;4244</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>lib\openssl64\libeay32MT.lib;lib\openssl64\ssleay32MT.lib;lib\mpir\mpirxx.lib;lib\mpir\mpir.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -194,10 +198,13 @@
     <ClCompile Include="sha256.cpp" />
     <ClCompile Include="includes\openssl\applink.c" />
     <ClCompile Include="jsonBuilder.cpp" />
-    <ClCompile Include="jsonClient.cpp" />
+    <ClCompile Include="jsonClient.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(WindowsSdkDir)\lib\x64;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="jsonObject.cpp" />
     <ClCompile Include="jsonParser.cpp" />
     <ClCompile Include="jsonrpc.cpp" />
+    <ClCompile Include="ticker.cpp" />
     <ClCompile Include="xptClient.cpp" />
     <ClCompile Include="xptClientPacketHandler.cpp" />
     <ClCompile Include="xptPacketbuffer.cpp" />

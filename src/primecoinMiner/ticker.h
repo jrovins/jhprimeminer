@@ -3,14 +3,13 @@
 
 #if (defined(__MACH__) && defined(__APPLE__))
 #include <mach/mach_time.h>
-#elif defined(__linux__)
-#include <time.h>
 #else
-#include <sys/time.h>
+#include <time.h>
 #endif
 
 #ifdef _WIN32
-typedef unsigned __int64 uint64_t
+#include<windows.h>
+typedef unsigned __int64 uint64_t;
 #else 
 #include <stdint.h>
 #include <errno.h>
