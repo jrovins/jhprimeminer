@@ -744,7 +744,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 		}
 		else if( memcmp(argument, "-c", 3)==0 )
 		{
-			// -primes
+			// -c
 			if( cIdx >= argc )
 			{
 				printf("Missing number after -c option\n");
@@ -1629,7 +1629,6 @@ int main(int argc, char **argv)
    primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
 	primeStats.nWaveTime = 0;
 	primeStats.nWaveRound = 0;
-	primeStats.nL1CacheElements = 256000;
 
 	// setup thread count and print info
 	printf("Using %d threads\n", commandlineInput.numThreads);
