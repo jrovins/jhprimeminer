@@ -999,6 +999,7 @@ void *CacheAutoTuningWorkerThread(void * arg)
 	std::map <unsigned int, unsigned int> mL1Stat;
 	std::map <unsigned int, unsigned int>::iterator mL1StatIter;
 	typedef std::pair <unsigned int, unsigned int> KeyVal;
+	if (bEnabled)
 	primeStats.nL1CacheElements = nL1CacheElementsStart;
 	
 	long nCounter = 0;
@@ -1014,6 +1015,8 @@ void *CacheAutoTuningWorkerThread(void * arg)
 		if (nCounter <=1) 
 			continue;// wait a litle at the beginning
 
+		if (bOptimalL1SearchInProgress && nCounter >=1)
+		{
 		nL1CacheElements = primeStats.nL1CacheElements;
 		mL1Stat.insert( KeyVal((uint32_t)primeStats.nL1CacheElements, (uint32_t)(primeStats.nWaveRound == 0 ? 0xFFFF : primeStats.nWaveTime / primeStats.nWaveRound)));
 		if (nL1CacheElements < nL1CacheElementsMax)
@@ -1038,13 +1041,15 @@ void *CacheAutoTuningWorkerThread(void * arg)
 			break;
 		}			
 		printf("Auto Tuning in progress: %u %%\n", ((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart));
+		}
 				
 		float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
 		printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
 			primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
 			primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
+		if (bEnabled)
+			nCounter ++;
 	}
-	return 0;
 }
 
 bool bEnablenPrimorialMultiplierTuning = true;
@@ -1168,7 +1173,7 @@ void *input_thread(void *)
 				uint32_t totalThreads = commandlineInput.numThreads + 2;
 				pthread_t threads[totalThreads];
 				const bool enabled = true;
-				pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)commandlineInput.enableCacheTunning);
+				pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&enabled);
 #endif
 				puts("Auto tunning for L1CacheElements size was started");
 			}
@@ -1298,7 +1303,7 @@ int jhMiner_main_xptMode()
   pthread_t threads[totalThreads];
   // start the Auto Tuning thread
   if( commandlineInput.enableCacheTunning ){
-  pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)commandlineInput.enableCacheTunning);
+  pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&commandlineInput.enableCacheTunning);
   }
   pthread_create(&threads[commandlineInput.numThreads+2], NULL, RoundSieveAutoTuningWorkerThread, NULL);
   pthread_create(&threads[commandlineInput.numThreads], NULL, input_thread, NULL);
