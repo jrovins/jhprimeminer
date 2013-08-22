@@ -967,7 +967,7 @@ void MultiplierAutoAdjust()
 }
 
 BYTE nRoundSievePercentage;
-bool bOptimalL1Search = true;
+bool bOptimalL1Search = false;
 bool bEnablenPrimorialMultiplierTuning = true;
 
 #ifdef _WIN32
@@ -1686,8 +1686,9 @@ int main(int argc, char **argv)
 	printf("   <]> - Increment Primorial Multiplier\n");
 	printf("   <-> - Decrement Sive size\n");
 	printf("   <+> - Increment Sieve size\n");
+if( commandlineInput.enableCacheTunning ){
 	printf("Note: While the initial auto tuning is in progress several values cannot be changed.\n");
-
+}
 
 	// enter different mainloops depending on protocol mode
 	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
