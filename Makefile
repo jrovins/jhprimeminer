@@ -2,7 +2,7 @@ CXX = g++
 CFLAGS = -mtune=native -O3 -Wall -Wextra -std=c++0x
 
 OSVERSION := $(shell uname -s)
-LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread
+LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread -lcurl
 
 ifeq ($(OSVERSION),Linux)
 	LIBS += -lrt

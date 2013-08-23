@@ -77,6 +77,9 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 #include"prime.h"
 #include"jsonrpc.h"
 
+//curl
+#include"curl_basic.h"
+
 #ifdef _WIN32
 #include "mpirxx.h"
 #include "mpir.h"
@@ -214,6 +217,10 @@ typedef struct
 
 extern jsonRequestTarget_t jsonRequestTarget; // rpc login data
 
+//for central server
+extern jsonRequestTarget_t statsRequestTarget; // rpc login data
+
+
 // prototypes from main.cpp
 bool error(const char *format, ...);
 bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock);
@@ -221,7 +228,36 @@ void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 h
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
+
+void notifyCentralServerofShare(uint32 shareErrorCode, float shareValue, char* rejectReason);
 void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
+
+typedef struct  
+{
+	char* workername;
+	char* workerpass;
+	char* host;
+	sint32 port;
+	sint32 numThreads;
+	sint32 sieveSize;
+	sint32 sievePercentage;
+	sint32 roundSievePercentage;
+	sint32 sievePrimeLimit;	// how many primes should be sieved
+	unsigned int L1CacheElements;
+	unsigned int primorialMultiplier;
+	bool enableCacheTunning;
+   sint32 targetOverride;
+   sint32 targetBTOverride;
+   sint32 initialPrimorial;
+   char* centralServer;
+   sint32 centralServerPort;
+   char* csApiKey;
+   bool csEnabled;
+   bool printDebug;
+}commandlineInput_t;
+
+extern commandlineInput_t commandlineInput;
+
 
 // direct access to share counters
 extern volatile int total_shares;
@@ -246,3 +282,6 @@ static inline uint32_t le32dec(const void *pp)
 	    ((uint32_t)(p[2]) << 16) + ((uint32_t)(p[3]) << 24));
 }
 #endif
+
+
+

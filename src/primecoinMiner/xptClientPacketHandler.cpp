@@ -121,5 +121,8 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 		if( rejectReason[0] != '\0' )
 			printf("Reason: %s\n", rejectReason);
 	}
+
+	if(commandlineInput.csEnabled)	notifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
+
 	return true;
 }
