@@ -325,7 +325,7 @@ class CSieveOfEratosthenes
       // Wipe the part of the array first
       memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(unsigned long));
 #endif
-
+      int multiplierPos = (nMinPrimeSeq * nArrayOffset) -1;
       for (unsigned int nPrimeSeq = nMinPrimeSeq; nPrimeSeq < nPrimes; nPrimeSeq++)
       {
          const unsigned int nPrime = vPrimes[nPrimeSeq];
@@ -347,14 +347,17 @@ class CSieveOfEratosthenes
 #else
          for (unsigned int i = 0; i < nArrayOffset; i++)
          {
-            unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
-            if (nVariableMultiplier == 0xFFFFFFFF) continue;
+            multiplierPos++;
+            //unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
+            unsigned int nVariableMultiplier = vMultipliers[multiplierPos];
+            //if (nVariableMultiplier == 0xFFFFFFFF) continue;
             while (nVariableMultiplier < nMaxMultiplier)
             {
                vfComposites[GetWordNum(nVariableMultiplier)] |= GetBitMask(nVariableMultiplier);
                nVariableMultiplier += nPrime;
             }
-            vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
+            //vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
+            vMultipliers[multiplierPos] = nVariableMultiplier;
          }
 #endif
       }
