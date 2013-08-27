@@ -46,7 +46,8 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	//mpz_class mpzHashFactor;
 	//Primorial(nPrimorialHashFactor, mpzHashFactor);
-	unsigned int nHashFactor = PrimorialFast(nPrimorialHashFactor);
+	//unsigned int nHashFactor = PrimorialFast(nPrimorialHashFactor);
+	unsigned int nHashFactor = PrimorialFast(7);
 
 	time_t unixTimeStart;
 	time(&unixTimeStart);

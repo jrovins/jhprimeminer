@@ -11,6 +11,7 @@ volatile int total_shares = 0;
 volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
 unsigned int nSievePercentage;
+unsigned int nTarget;
 char* dt;
 
 bool error(const char *format, ...)
@@ -487,6 +488,8 @@ typedef struct
 	unsigned int L1CacheElements;
 	unsigned int primorialMultiplier;
 	bool enableCacheTunning;
+	sint32 target;
+	sint32 sieveExtensions;
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -692,6 +695,38 @@ void jhMiner_parseCommandline(int argc, char **argv)
 
 			cIdx++;
 		}
+		else if( memcmp(argument, "-target", 8)==0 )
+		{
+			// -target
+			if( cIdx >= argc )
+			{
+				printf("Missing number after -target option\n");
+				ExitProcess(0);
+			}
+			commandlineInput.target = atoi(argv[cIdx]);
+			if( commandlineInput.target < 0 || commandlineInput.target > 20 )
+			{
+				printf("-target parameter out of range, must be between 0 - 20\n");
+				ExitProcess(0);
+			}
+			cIdx++;
+		}
+		else if( memcmp(argument, "-se", 4)==0 )
+		{
+			// -target
+			if( cIdx >= argc )
+			{
+				printf("Missing number after -se option\n");
+				ExitProcess(0);
+			}
+			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
+			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 15 )
+			{
+				printf("-se parameter out of range, must be between 0 - 15\n");
+				ExitProcess(0);
+			}
+			cIdx++;
+		}
 		else if( memcmp(argument, "-help", 6)==0 || memcmp(argument, "--help", 7)==0 )
 		{
 			jhMiner_printHelp();
@@ -798,10 +833,10 @@ static void CacheAutoTuningWorkerThread(bool bEnabled)
 	bOptimalL1SearchInProgress = true;
 	
 	DWORD startTime = GetTickCount();	
-	unsigned int nL1CacheElementsStart = 8 * sizeof(unsigned long) * 1000;
-	unsigned int nL1CacheElementsMax   = 2000000;
-	unsigned int nL1CacheElementsIncrement = 8 * sizeof(unsigned long) * 1000;
-	BYTE nSampleSeconds = 10;
+	unsigned int nL1CacheElementsStart = 64000;
+	unsigned int nL1CacheElementsMax   = 2560000;
+	unsigned int nL1CacheElementsIncrement = 64000;
+	BYTE nSampleSeconds = 20;
 
 	unsigned int nL1CacheElements = primeStats.nL1CacheElements;
 	std::map <unsigned int, unsigned int> mL1Stat;
@@ -927,14 +962,16 @@ void PrintCurrentSettings()
     unsigned int seconds = uptime / (1000);
 
 	printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");	
-	printf("Worker name: %s\n", commandlineInput.workername);
-	printf("Number of mining threads: %u\n", commandlineInput.numThreads);
-	printf("Sieve Size: %u\n", nMaxSieveSize);
-	printf("Sieve Percentage: %u\n", nSievePercentage);
-	printf("Round Sieve Percentage: %u\n", nRoundSievePercentage);
-	printf("Prime Limit: %u\n", commandlineInput.sievePrimeLimit);
-	printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
-	printf("L1CacheElements: %u\n", primeStats.nL1CacheElements);	
+	printf("Worker name (-u): %s\n", commandlineInput.workername);
+	printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
+	printf("Sieve Size (-s): %u\n", nMaxSieveSize);
+	printf("Sieve Percentage (-d): %u\n", nSievePercentage);
+	printf("Round Sieve Percentage (-r): %u\n", nRoundSievePercentage);
+	printf("Prime Limit (-primes): %u\n", commandlineInput.sievePrimeLimit);
+	printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
+	printf("L1CacheElements (-c): %u\n", primeStats.nL1CacheElements);	
+	printf("Chain Length Target (-target): %u\n", nTarget);	
+	printf("Sieve Extensions (-se): %u\n", nSieveExtensions);	
 	printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
 	printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
 	printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n\n");
@@ -1116,7 +1153,7 @@ int jhMiner_main_xptMode()
 			return 0;
 
 		// calculate stats every second tick
-		if( loopCounter&1 )
+		if( loopCounter % 5 == 0)
 		{
 			double totalRunTime = (double)(GetTickCount() - primeStats.startTime);
 			double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
@@ -1124,7 +1161,12 @@ int jhMiner_main_xptMode()
 				statsPassedTime = 1.0; // avoid division by zero
 			double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
 			primeStats.primeLastUpdate = GetTickCount();
+			float avgCandidatesPerRound = (double)primeStats.nCandidateCount / primeStats.nSieveRounds;
+			float sievesPerSecond = (double)primeStats.nSieveRounds / (statsPassedTime / 1000.0);
+
 			primeStats.primeChainsFound = 0;
+			primeStats.nCandidateCount = 0;
+			primeStats.nSieveRounds = 0;
 			uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
 			primeStats.bestPrimeChainDifficulty = 0;
 			float primeDifficulty = GetChainDifficulty(bestDifficulty);
@@ -1140,10 +1182,11 @@ int jhMiner_main_xptMode()
 				printf("Val/h %.03f - PPS: %d", shareValuePerHour, (sint32)primesPerSecond);
 				for(int i=4; i<7; i++)
 				{
-					printf(" - %dch/h: %.02f", i, ((double)primeStats.chainCounter[i] / totalRunTime) * 3600000.0); 
+					printf(" - %dch: %.01f", i, ((double)primeStats.chainCounter[i] / totalRunTime) * 3600000.0); 
 				}
-				printf(" - Last 4ch/h: %.02f - Last 5ch/h: %.02f\n", fourSharePerPeriod, fiveSharePerPeriod);
+				//printf(" - Last 4ch/h: %.02f - Last 5ch/h: %.02f\n", fourSharePerPeriod, fiveSharePerPeriod);
 				//printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
+				printf(" - SPS:%.03f - ACC:%d\n", sievesPerSecond, (sint32)avgCandidatesPerRound);
 				//printf("\n");
 			}
 		}
@@ -1253,13 +1296,15 @@ int main(int argc, char **argv)
 	GetSystemInfo( &sysinfo );
 	commandlineInput.numThreads = sysinfo.dwNumberOfProcessors;
 	commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
-	commandlineInput.sieveSize = 1000000; // default maxSieveSize
+	commandlineInput.sieveSize = 1024000; // default maxSieveSize
 	commandlineInput.sievePercentage = 10; // default 
 	commandlineInput.roundSievePercentage = 70; // default 
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
-	
+	commandlineInput.target = 0;
+	commandlineInput.sieveExtensions = 7;
+
 	commandlineInput.sievePrimeLimit = 0;
 	// parse command lines
 	jhMiner_parseCommandline(argc, argv);
@@ -1267,6 +1312,8 @@ int main(int argc, char **argv)
 	nMaxSieveSize = commandlineInput.sieveSize;
 	nSievePercentage = commandlineInput.sievePercentage;
 	nRoundSievePercentage = commandlineInput.roundSievePercentage;
+	nTarget = commandlineInput.target;
+	nSieveExtensions = commandlineInput.sieveExtensions;
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
 	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
