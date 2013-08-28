@@ -76,9 +76,7 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 
 #include"prime.h"
 #include"jsonrpc.h"
-
-//curl
-#include"curl_basic.h"
+#include"stats.h"
 
 #ifdef _WIN32
 #include "mpirxx.h"
@@ -197,6 +195,7 @@ uint64 blockStartTime;
 
 extern primeStats_t primeStats;
 
+
 typedef struct  
 {
 	uint32	version;
@@ -229,7 +228,6 @@ uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
 
-void notifyCentralServerofShare(uint32 shareErrorCode, float shareValue, char* rejectReason);
 void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
 
 typedef struct  
@@ -254,6 +252,8 @@ typedef struct
    char* csApiKey;
    bool csEnabled;
    bool printDebug;
+	sint32 sieveExtensions;
+
 }commandlineInput_t;
 
 extern commandlineInput_t commandlineInput;

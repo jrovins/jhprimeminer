@@ -66,3 +66,4 @@ void xptClient_sendWorkerLogin(xptClient_t* xptClient);
 bool xptClient_processPacket_authResponse(xptClient_t* xptClient);
 bool xptClient_processPacket_blockData1(xptClient_t* xptClient);
 bool xptClient_processPacket_shareAck(xptClient_t* xptClient);
+

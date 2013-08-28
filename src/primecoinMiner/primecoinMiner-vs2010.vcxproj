@@ -204,6 +204,7 @@
     <ClCompile Include="jsonObject.cpp" />
     <ClCompile Include="jsonParser.cpp" />
     <ClCompile Include="jsonrpc.cpp" />
+    <ClCompile Include="stats.cpp" />
     <ClCompile Include="ticker.cpp" />
     <ClCompile Include="xptClient.cpp" />
     <ClCompile Include="xptClientPacketHandler.cpp" />
@@ -344,6 +345,7 @@
     <ClInclude Include="mpirxx.h" />
     <ClInclude Include="prime.h" />
     <ClInclude Include="bignum2.h" />
+    <ClInclude Include="stats.h" />
     <ClInclude Include="ticker.h" />
     <ClInclude Include="uint256.h" />
     <ClInclude Include="jhlib\bmp.h" />

@@ -108,15 +108,12 @@ public:
 	CBigNum(signed char n)      { BN_initX(); if (n >= 0) setulong(n); else setint64(n); }
 	CBigNum(short n)            { BN_initX(); if (n >= 0) setulong(n); else setint64(n); }
 	CBigNum(int n)              { BN_initX(); if (n >= 0) setulong(n); else setint64(n); }
-#if defined(__i386__) || defined(_WIN32) || defined(_WIN64)
-// these 64 bit on most 64 bit platforms, so they will clash with (s/u)int64
-	CBigNum(long n)             { BN_initX(); if (n >= 0) setulong(n); else setint64(n); }
-  CBigNum(unsigned long n)    { BN_initX(); setulong(n); }
-#endif
+//	CBigNum(long n)             { BN_initX(); if (n >= 0) setulong(n); else setint64(n); }
 	CBigNum(sint64 n)            { BN_initX(); setint64(n); }
 	CBigNum(unsigned char n)    { BN_initX(); setulong(n); }
 	CBigNum(unsigned short n)   { BN_initX(); setulong(n); }
 	CBigNum(unsigned int n)     { BN_initX(); setulong(n); }
+//	CBigNum(unsigned long n)    { BN_initX(); setulong(n); }
 	CBigNum(uint64 n)           { BN_initX(); setuint64(n); }
 	explicit CBigNum(uint256 n) { BN_initX(); setuint256(n); }
 	

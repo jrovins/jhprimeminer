@@ -49,7 +49,11 @@ bitmap_t *bmp_load(char *path)
 		vbmp->sizeX = bmp_ih.biWidth;
 		vbmp->sizeY = bmp_ih.biHeight;
 		if( vbmp->sizeY < 0 )
-			__debugbreak();
+#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 		vbmp->bitDepth = 24;
 		vbmp->data = BitmapData;
 
@@ -144,7 +148,11 @@ bool bmp_save(char *path, bitmap_t *bitmap)
 			}
 		}
 		else
-			__debugbreak();
+#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 		FlushFileBuffers(hBG);
 		CloseHandle(hBG);
 		return true;

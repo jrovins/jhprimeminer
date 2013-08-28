@@ -238,7 +238,11 @@ char *fileMgr_readLine(file_t *file)
 		cstr[size] = n;
 		size++;
 		if( size == limit )
-			__debugbreak();
+#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 	}
 	cstr[size] = '\0';
 	return cstr;

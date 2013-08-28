@@ -59,10 +59,18 @@ tgaImage_t* tga_load(char *filePath)
 			}
 		}
 		else
-			__debugbreak();
+#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 	}
 	else
+#ifdef _WIN32
 		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
 	// developer data
 	// not necessary for us, ignore
 	stream_destroy(in); // close stream and file

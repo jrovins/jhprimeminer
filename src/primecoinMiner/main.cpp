@@ -6,6 +6,9 @@
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
+#include <termios.h>            //termios, TCSANOW, ECHO, ICANON
+#include <unistd.h>     //STDIN_FILENO
+
 
 //used for get_num_cpu
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -22,12 +25,12 @@ unsigned int nSievePercentage;
 bool nPrintDebugMessages;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
+unsigned int nTarget;
 char* dt;
 
 bool error(const char *format, ...)
 {
 	puts(format);
-	//__debugbreak();
 	return false;
 }
 
@@ -193,127 +196,6 @@ void primecoinBlock_generateBlockHash(primecoinBlock_t* primecoinBlock, uint8 ha
 	sha256_finish(&ctx, hashOutput);
 }
 
-void notifyCentralServerofShare(uint32 shareErrorCode, float shareValue, char* rejectReason)
-{
-		char sURL[256];
-
-		double statsPassedTime = getTimeMilliseconds() - primeStats.primeLastUpdate;
-		if (statsPassedTime < 0) statsPassedTime *= -1;
-		if( statsPassedTime < 1.0 )
-			statsPassedTime = 1.0; // avoid division by zero
-		double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
-
-
-
-	if( shareErrorCode == 0 ){
-		sprintf(sURL, "http://%s/report.php?key=%s&workername=%s&validshare=%f&pps=%f", commandlineInput.centralServer, commandlineInput.csApiKey, jsonRequestTarget.authUser, shareValue, primesPerSecond);
-	}
-	else{
-		if( rejectReason[0] != '\0' ){
-			sprintf(sURL, "http://%s/report.php?key=%s&workername=%s&invalidshare=%f&pps=%f&reason=%s", commandlineInput.centralServer, commandlineInput.csApiKey, jsonRequestTarget.authUser, shareValue, primesPerSecond, curl_encodedReason);
-		}
-		else{
-			sprintf(sURL, "http://%s/report.php?key=%s&workername=%s&invalidshare=%f&pps=%f", commandlineInput.centralServer, commandlineInput.csApiKey, jsonRequestTarget.authUser, shareValue, primesPerSecond);
-		}
-	}
-			printf("URL Tried: %s", sURL);
-
-
-
-		std::cout << std::endl << "Reponse from server: " << responseData.str() << std::endl;
-
-	
-
-
-}
-
-void connectToCentralServerandGetSettings()
-{
-
-	//build the stats into a nice json bundle
-		// prepare buffer to send
-		fStr_buffer4kb_t fStrBuffer_parameter;
-		fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
-		fStr_appendFormatted(fStr_parameter, "[\"key\":\"%s\"", commandlineInput.csApiKey); // no \"]
-		
-
-		fStr_appendFormatted(fStr_parameter, ",\"%s\":\"%s\"","key","value");
-
-
-
-		fStr_append(fStr_parameter, "\"]"); // finish constructing the request
-
-		// send request
-		sint32 rpcErrorCode = 0;
-		jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getAllSettings", fStr_parameter, &rpcErrorCode);
-		if( jsonReturnValue == NULL )
-		{
-			printf("PushWorkResult failed :(\n");
-			return;
-		}
-		else
-		{
-			// rpc call worked, sooooo.. is the server happy with the result?
-			jsonObject_t* jsonReturnValueBool = jsonObject_getParameter(jsonReturnValue, "result");
-			if( jsonObject_isTrue(jsonReturnValueBool) )
-			{
-				total_shares++;
-				valid_shares++;
-				time_t now = time(0);
-				dt = ctime(&now);
-				//printf("Valid share found!");
-				//printf("[ %d / %d ] %s",valid_shares, total_shares,dt);
-				jsonObject_freeObject(jsonReturnValue);
-				return;
-			}
-			else
-			{
-				total_shares++;
-				// the server says no to this share :(
-				printf("Server rejected share (BlockHeight: %u/%u nBits: 0x%08uX)\n", primecoinBlock->serverData.blockHeight, jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex), primecoinBlock->serverData.client_shareBits);
-				jsonObject_freeObject(jsonReturnValue);
-				return;
-			}
-		}
-		jsonObject_freeObject(jsonReturnValue);
-		return;
-
-
-	sint32 rpcErrorCode = 0;
-	//uint32 time1 = GetTickCount();
-	jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "notifyStats", NULL, &rpcErrorCode);
-	//uint32 time2 = GetTickCount() - time1;
-	// printf("request time: %dms\n", time2);
-	if( jsonReturnValue == NULL )
-	{
-		printf("centralServer notifyStats() failed with %serror code %d\n", (rpcErrorCode>1000)?"http ":"", rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode);
-		return;
-	}
-	else
-	{
-		jsonObject_t* jsonResult = jsonObject_getParameter(jsonReturnValue, "result");
-		jsonObject_t* jsonResult_data = jsonObject_getParameter(jsonResult, "data");
-		//jsonObject_t* jsonResult_hash1 = jsonObject_getParameter(jsonResult, "hash1");
-//		jsonObject_t* jsonResult_target = jsonObject_getParameter(jsonResult, "target");   unused?
-		jsonObject_t* jsonResult_serverData = jsonObject_getParameter(jsonResult, "serverData");
-		//jsonObject_t* jsonResult_algorithm = jsonObject_getParameter(jsonResult, "algorithm");
-		if( jsonResult_data == NULL )
-		{
-			printf("Error :(\n");
-			workData.workEntry[0].dataIsValid = false;
-			jsonObject_freeObject(jsonReturnValue);
-			return;
-		}
-		// data
-		uint32 stringData_length = 0;
-		uint8* stringData_data = jsonObject_getStringData(jsonResult_data, &stringData_length);
-		//printf("data: %.*s...\n", (sint32)min(48, stringData_length), stringData_data);
-
-		jsonObject_freeObject(jsonReturnValue);
-	}
-}
-
-
 typedef struct  
 {
 	bool dataIsValid;
@@ -343,7 +225,8 @@ typedef struct
 workData_t workData;
 
 jsonRequestTarget_t jsonRequestTarget; // rpc login data
-//jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
+jsonRequestTarget_t statsRequestTarget; // rpc login data
+jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
 bool useLocalPrimecoindForLongpoll;
 
 
@@ -659,7 +542,7 @@ void *jhMiner_workerThread_xpt(void *arg)
 		memcpy(&primecoinBlock.serverData, serverData, 32);
 		// start mining
 		//uint32 time1 = GetTickCount();
-		BitcoinMiner(&primecoinBlock, threadIndex);
+      		BitcoinMiner(&primecoinBlock, threadIndex);
 		//printf("Mining stopped after %dms\n", GetTickCount()-time1);
 		primecoinBlock.mpzPrimeChainMultiplier = 0;
 	}
@@ -966,6 +849,22 @@ void jhMiner_parseCommandline(int argc, char **argv)
             commandlineInput.printDebug = true;
          cIdx++;
       }
+else if( memcmp(argument, "-se", 4)==0 )
+		{
+			// -target
+			if( cIdx >= argc )
+			{
+				printf("Missing number after -se option\n");
+				exit(0);
+			}
+			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
+			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 15 )
+			{
+				printf("-se parameter out of range, must be between 0 - 15\n");
+				exit(0);
+			}
+			cIdx++;
+		}
 		else if( memcmp(argument, "-help", 6)==0 || memcmp(argument, "--help", 7)==0 )
 		{
 			jhMiner_printHelp();
@@ -992,7 +891,7 @@ BYTE nRoundSievePercentage;
 bool bOptimalL1SearchInProgress = false;
 
 #ifdef _WIN32
-int CacheAutoTuningWorkerThread(bool bEnabled)
+static void CacheAutoTuningWorkerThread(bool bEnabled)
 #else
 void *CacheAutoTuningWorkerThread(void * arg)
 #endif
@@ -1022,7 +921,7 @@ void *CacheAutoTuningWorkerThread(void * arg)
 	primeStats.nL1CacheElements = nL1CacheElementsStart;
 	
 	long nCounter = 0;
-	while (true && bEnabled)
+	while (true && bEnabled && (xptClient_isDisconnected(workData.xptClient, NULL) == false))
 	{		
 		primeStats.nWaveTime = 0;
 		primeStats.nWaveRound = 0;
@@ -1033,6 +932,11 @@ void *CacheAutoTuningWorkerThread(void * arg)
 		nCounter ++;
 		if (nCounter <=1) 
 			continue;// wait a litle at the beginning
+		if ( !xptClient_isDisconnected(workData.xptClient, NULL) ){
+			bOptimalL1SearchInProgress = false;
+			primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
+			return 0;
+		}
 
 		if (bOptimalL1SearchInProgress && nCounter >=1)
 		{
@@ -1082,7 +986,7 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 		// Auto Tuning for nPrimorialMultiplier
 		int nSampleSeconds = 3;
 
-		while (true)
+		while (true && !xptClient_isDisconnected(workData.xptClient, NULL))
 		{
 			if (!bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning){
 			primeStats.nWaveTime = 0;
@@ -1101,24 +1005,35 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 			if (!bEnablenPrimorialMultiplierTuning)
 				continue; // Auto Tuning is disabled
 
+			if ( !xptClient_isDisconnected(workData.xptClient, NULL) ){
+				bEnablenPrimorialMultiplierTuning = false;
+				return 0;
+			}
 
 			if (ratio > nRoundSievePercentage + 5)
 			{
       // explicit cast to ref removes g++ warning but might be dumb, dunno
 				if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
-					error("PrimecoinMiner() : primorial increment overflow");
+					error("PrimecoinMiner() : primorial increment overflow - resetting");
+				primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
 				printf( "\nSieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
-			} else 
+			}
+			else
+			{
 				if (ratio < nRoundSievePercentage - 5)
 				{
-					if ( primeStats.nPrimorialMultiplier > 2)
+					//fix 0/100% bug lack of error message...
+					if ( primeStats.nPrimorialMultiplier >= 2)
 					{
-        // explicit cast to ref removes g++ warning but might be dumb, dunno
-				if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier))
-							error("PrimecoinMiner() : primorial decrement overflow");
+						if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier)){
+							//@todo: fix (bandaid) 0/100% bug?
+							error("PrimecoinMiner() : primorial decrement overflow - resetting");
+							primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
+						}
 					}
 					printf( "\nSieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
 				}
+			}
 		}
 	}
 		return 0;
@@ -1137,17 +1052,19 @@ void PrintCurrentSettings()
     unsigned int seconds = uptime / (1000);
 
 	printf("\n--------------------------------------------------------------------------------\n");	
-	printf("Worker name: %s\n", commandlineInput.workername);
+	printf("Worker name (-u): %s\n", commandlineInput.workername);
 if(commandlineInput.csEnabled)
-	printf("Reporting Stats to: %s\n", commandlineInput.centralServer);
-
-	printf("Number of mining threads: %u\n", commandlineInput.numThreads);
-	printf("Sieve Size: %u\n", nMaxSieveSize);
-	printf("Sieve Percentage: %u\n", nSievePercentage);
-	printf("Round Sieve Percentage: %u\n", nRoundSievePercentage);
-	printf("Prime Limit: %u\n", commandlineInput.sievePrimeLimit);
-	printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
-	printf("L1CacheElements: %u\n", primeStats.nL1CacheElements);	
+	printf("Central Server (-cs): %s\n", commandlineInput.centralServer);
+	printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
+	printf("Sieve Size (-s): %u\n", nMaxSieveSize);
+	printf("Sieve Percentage (-d): %u\n", nSievePercentage);
+	printf("Round Sieve Percentage (-r): %u\n", nRoundSievePercentage);
+	printf("Prime Limit (-primes): %u\n", commandlineInput.sievePrimeLimit);
+	printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
+	printf("L1CacheElements (-c): %u\n", primeStats.nL1CacheElements);	
+	printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
+	printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
+	printf("Sieve Extensions (-se): %u\n", nSieveExtensions);	
 	printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
 	printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
 	printf("--------------------------------------------------------------------------------\n");
@@ -1156,11 +1073,28 @@ if(commandlineInput.csEnabled)
 
 
 #ifdef _WIN32
-static void input_thread()
+static void input_thread(){
 #else
-void *input_thread(void *)
+void *input_thread(void *){
+static struct termios oldt, newt;
+    /*tcgetattr gets the parameters of the current terminal
+    STDIN_FILENO will tell tcgetattr that it should write the settings
+    of stdin to oldt*/
+    tcgetattr( STDIN_FILENO, &oldt);
+    /*now the settings will be copied*/
+    newt = oldt;
+
+    /*ICANON normally takes care that one line at a time will be processed
+    that means it will return if it sees a "\n" or an EOF or an EOL*/
+    newt.c_lflag &= ~(ICANON);          
+
+    /*Those new settings will be set to STDIN
+    TCSANOW tells tcsetattr to change attributes immediately. */
+    tcsetattr( STDIN_FILENO, TCSANOW, &newt);
+
+
 #endif
-{
+
 	while (true) {
 		int input = getchar();
 		switch (input) {
@@ -1168,6 +1102,10 @@ void *input_thread(void *)
 			std::exit(0);
 #ifdef _WIN32
 			return;
+#else
+			/*restore the old settings*/
+    tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
+	return 0;
 #endif
 			break;
 		case '[':
@@ -1247,6 +1185,10 @@ void *input_thread(void *)
 	}
 #ifdef _WIN32
 	return;
+#else
+	/*restore the old settings*/
+    tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
+    return 0;
 #endif
 }
 #ifdef _WIN32
@@ -1362,12 +1304,13 @@ int jhMiner_main_xptMode()
 			if( statsPassedTime < 1.0 )
 				statsPassedTime = 1.0; // avoid division by zero
 			double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
-			primeStats.primeLastUpdate = getTimeMilliseconds();
 			primeStats.primeChainsFound = 0;
          		float avgCandidatesPerRound = (double)primeStats.nCandidateCount / primeStats.nSieveRounds;
        			float sievesPerSecond = (double)primeStats.nSieveRounds / (statsPassedTime / 1000.0);
+			primeStats.primeLastUpdate = getTimeMilliseconds();
          		primeStats.nCandidateCount = 0;
          		primeStats.nSieveRounds = 0;
+         primeStats.primeChainsFound = 0;
 			uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
 			primeStats.bestPrimeChainDifficulty = 0;
 			float primeDifficulty = GetChainDifficulty(bestDifficulty);
@@ -1386,14 +1329,14 @@ int jhMiner_main_xptMode()
             printf("\nVal/h: %8f - PPS: %d - SPS: %.03f - ACC: %d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
             printf(" Chain/Hr: ");
 
-            for(int i=4; i<=8; i++)
+            for(int i=6; i<=10; i++)
 				{
                printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
 				}
-            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 9)
+            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 11)
             {
             //   printf("\n           ");
-               for(int i=9; i<=12; i++)
+               for(int i=11; i<=15; i++)
                {
                   printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
                }
@@ -1479,7 +1422,7 @@ int jhMiner_main_xptMode()
                for (int i = 6; i <= std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
                {
                   double sharePerHour = ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0;
-                  printf("%2dch/h: %8.02f - %lu [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
+                  printf("%2dch/h: %8.02f - %u [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
                      i, sharePerHour, 
                      primeStats.chainCounter[0][i],
                      primeStats.chainCounter[1][i],
@@ -1516,13 +1459,14 @@ int main(int argc, char **argv)
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
-   commandlineInput.targetOverride = 0;
+commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
    commandlineInput.initialPrimorial = 61;
    commandlineInput.printDebug = 0;
    commandlineInput.centralServer = "http://xpm.tandyuk.com";
    commandlineInput.centralServerPort = 80;
    commandlineInput.csEnabled = false;
+	commandlineInput.sieveExtensions = 7;
 
 	
 	commandlineInput.sievePrimeLimit = 0;
@@ -1534,6 +1478,8 @@ int main(int argc, char **argv)
 	nRoundSievePercentage = commandlineInput.roundSievePercentage;
    nOverrideTargetValue = commandlineInput.targetOverride;
    nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+	nSieveExtensions = commandlineInput.sieveExtensions;
+
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
 	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
@@ -1558,15 +1504,15 @@ int main(int argc, char **argv)
 	//CRYPTO_set_mem_ex_functions(mallocEx, reallocEx, freeEx);
 	
 	printf(" ============================================================================== \n");
-	printf("|  jhPrimeMiner - mod by rdebourbon -v3beta                     |\n");
-	printf("|     optimised from hg5fm (mumus) v7.1 build.                  |\n");
-	printf("|  author: JH (http://ypool.net)                                |\n");
-	printf("|  contributors: x3maniac                                       |\n");
-	printf("|  Credits: Sunny King for the original Primecoin client&miner  |\n");
-	printf("|  Credits: mikaelh for the performance optimizations           |\n");
-	printf("|  Credits: erkmos for the original linux port                  |\n");
-	printf("|  Credits: tandyuk for the linux build of rdebourbons mod      |\n");
-	printf("|                                                               |\n");
+	printf("|  jhPrimeMiner - mod by rdebourbon -v3.2beta                     |\n");
+	printf("|     optimised from hg5fm (mumus) v7.1 build + HP10 updates      |\n");
+	printf("|  author: JH (http://ypool.net)                                  |\n");
+	printf("|  contributors: x3maniac                                         |\n");
+	printf("|  Credits: Sunny King for the original Primecoin client&miner    |\n");
+	printf("|  Credits: mikaelh for the performance optimizations             |\n");
+	printf("|  Credits: erkmos for the original linux port                    |\n");
+	printf("|  Credits: tandyuk for the linux build of rdebourbons mod        |\n");
+	printf("|                                                                 |\n");
 	printf("|  Donations:                                                   |\n");
 	printf("|        XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv                |\n");
 	printf("|        LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE                |\n");
@@ -1656,7 +1602,7 @@ int main(int argc, char **argv)
   struct addrinfo hints, *res;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
-  getaddrinfo(commandlineInput.host, 0, &hints, &res);
+  getaddrinfo(commandlineInput.centralServer, 0, &hints, &res);
   char ipText[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &((struct sockaddr_in *)res->ai_addr)->sin_addr, ipText, INET_ADDRSTRLEN);
 #endif
@@ -1773,9 +1719,7 @@ if( commandlineInput.enableCacheTunning ){
 }
 
 	// enter different mainloops depending on protocol mode
-	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-		return jhMiner_main_getworkMode();
-	else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
+	if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
 		return jhMiner_main_xptMode();
 
 	return 0;

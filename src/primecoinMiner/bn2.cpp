@@ -146,7 +146,7 @@ static uint32_t ALWAYS_INLINE ctz( uint32_t x )
 int inline BN2_nz_num_unset_bits_from_lsb(const BIGNUM *a)
 {
 	sint32 bIdx = 0;
-	unsigned long idx = 0;
+	uint32 idx = 0;
 	sint32 maxIdx = a->top-1;
 	do 
 	{
@@ -221,7 +221,7 @@ int BN2_sub(BIGNUM *r, const BIGNUM *a, const BIGNUM *b)
 	return(1);
 }
 
-int BN2_nnmod(BIGNUM *r, const BIGNUM *m, const BIGNUM *d)
+int BN2_nnmod(BIGNUM *r, const BIGNUM *m, const BIGNUM *d, BN_CTX *ctx)
 {
 	/* like BN_mod, but returns non-negative remainder
 	* (i.e.,  0 <= r < |d|  always holds) */
@@ -490,7 +490,7 @@ BIGNUM *BN2_mod_inverse(BIGNUM *in,
 	A->neg = 0;
 	if (B->neg || (BN_ucmp(B, A) >= 0))
 	{
-		if (!BN2_nnmod(B, B, A)) goto err;
+		if (!BN2_nnmod(B, B, A, ctx)) goto err;
 	}
 	sign = -1;
 	/* From  B = a mod |n|,  A = |n|  it follows that
@@ -726,7 +726,7 @@ BIGNUM *BN2_mod_inverse(BIGNUM *in,
 		}
 		else
 		{
-			if (!BN2_nnmod(R,Y,n)) goto err;
+			if (!BN2_nnmod(R,Y,n,ctx)) goto err;
 		}
 	}
 	else

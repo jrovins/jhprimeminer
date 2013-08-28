@@ -75,10 +75,19 @@ typedef struct
 
 jsonObject_t* jsonParser_parse(uint8* stream, uint32 dataLength);
 
-typedef struct _jsonRpcServer_t jsonRpcServer_t;
-
 #define JSON_INITIAL_RECV_BUFFER_SIZE	(1024*4) // 4KB
 #define JSON_MAX_RECV_BUFFER_SIZE	(1024*1024*4) // 4MB
+
+typedef struct jsonRpcServer_t
+{
+#ifdef _WIN32
+	SOCKET acceptSocket;
+#else
+	int acceptSocket;
+#endif
+	simpleList_t* list_connections;
+}jsonRpcServer_t;
+
 
 typedef struct  
 {
@@ -101,16 +110,6 @@ typedef struct
 	char httpAuthUsername[64];
 	char httpAuthPassword[64];
 }jsonRpcClient_t;
-
-typedef struct _jsonRpcServer_t 
-{
-#ifdef _WIN32
-	SOCKET acceptSocket;
-#else
-	int acceptSocket;
-#endif
-	simpleList_t* list_connections;
-}jsonRpcServer_t;
 
 // server
 jsonRpcServer_t* jsonRpc_createServer(uint16 port);

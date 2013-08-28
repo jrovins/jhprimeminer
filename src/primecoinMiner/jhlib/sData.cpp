@@ -25,8 +25,8 @@ char *streamEx_readLine(stream_t *stream)
 		size++;
 		if( size == limit )
 		{
-			OutputDebugString("sData: Buffer overrun detected");
-			ExitProcess(-4000);
+			printf("sData: Buffer overrun detected");
+			exit(-4000);
 		}
 	}
 	cstr[size] = '\0';

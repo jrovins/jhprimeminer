@@ -590,7 +590,12 @@ uint32 __fastcall streamEx_substream_readData(void *object, void *buffer, uint32
 
 uint32 __fastcall streamEx_substream_writeData(void *object, void *buffer, uint32 len)
 {	
-	__debugbreak(); // no write access for substreams?
+	#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
+ // no write access for substreams?
 	return 0;
 }
 
@@ -602,7 +607,12 @@ uint32 __fastcall streamEx_substream_getSize(void *object)
 
 void __fastcall streamEx_substream_setSize(void *object, uint32 size)
 {
-	__debugbreak(); // not implemented 
+	#ifdef _WIN32
+		__debugbreak();
+#else
+	    raise(SIGTRAP);
+#endif 
+ // not implemented 
 }
 
 uint32 __fastcall streamEx_substream_getSeek(void *object)

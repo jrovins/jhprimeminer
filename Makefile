@@ -42,6 +42,7 @@ OBJS = \
 	src/primecoinMiner/miner.o \
 	src/primecoinMiner/ripemd160.o \
 	src/primecoinMiner/sha256.o \
+	src/primecoinMiner/stats.o \
 	src/primecoinMiner/xptClient.o \
 	src/primecoinMiner/xptClientPacketHandler.o \
 	src/primecoinMiner/xptPacketbuffer.o \

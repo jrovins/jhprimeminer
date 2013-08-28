@@ -51,28 +51,30 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 
 	time_t unixTimeStart;
 	time(&unixTimeStart);
-//	uint32 nTimeRollStart = primecoinBlock->timestamp;   unused?
-
-	//uint32 nCurrentTick = GetTickCount();
-
-	while( getTimeMilliseconds() < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
+	uint32 nTimeRollStart = primecoinBlock->timestamp - 5;
+   uint32 nLastRollTime = getTimeMilliseconds();
+	uint32 nCurrentTick = nLastRollTime;
+	while( nCurrentTick < nTime && primecoinBlock->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex) )
 			{
-		//nCurrentTick = GetTickCount();
-		//if( primecoinBlock->xptMode )
-		//{
-		//	// when using x.pushthrough, roll time
-		//	time_t unixTimeCurrent;
-		//	time(&unixTimeCurrent);
-		//	uint32 timeDif = unixTimeCurrent - unixTimeStart;
-		//	uint32 newTimestamp = nTimeRollStart + timeDif;
-		//	if( newTimestamp != primecoinBlock->timestamp )
-		//	{
-		//		primecoinBlock->timestamp = newTimestamp;
+		nCurrentTick = getTimeMilliseconds();
+      // Roll Time stamp every 10 secs.
+		if ((primecoinBlock->xptMode) && (nCurrentTick < nLastRollTime || (nLastRollTime - nCurrentTick >= 10000)))
+		{
+			// when using x.pushthrough, roll time
+			time_t unixTimeCurrent;
+			time(&unixTimeCurrent);
+			uint32 timeDif = unixTimeCurrent - unixTimeStart;
+			uint32 newTimestamp = nTimeRollStart + timeDif;
+			if( newTimestamp != primecoinBlock->timestamp )
+			{
+				primecoinBlock->timestamp = newTimestamp;
+         	primecoinBlock->nonce = 0x01000000 * threadIndex;
 		//		primecoinBlock->nonce = 0;
-		//		//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
+				//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
 		//		nPrimorialMultiplier = nPrimorialMultiplierStart;
-		//	}
-		//}
+			}
+         nLastRollTime = nCurrentTick;
+		}
 
 		primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
 		//
