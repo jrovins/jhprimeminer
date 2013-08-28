@@ -493,6 +493,7 @@ typedef struct
    sint32 targetOverride;
    sint32 targetBTOverride;
    sint32 initialPrimorial;
+   sint32 sieveExtensions;
    bool printDebug;
 }commandlineInput_t;
 
@@ -747,6 +748,22 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
+		else if( memcmp(argument, "-se", 4)==0 )
+		{
+			// -target
+			if( cIdx >= argc )
+			{
+				printf("Missing number after -se option\n");
+				ExitProcess(0);
+			}
+			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
+			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 15 )
+			{
+				printf("-se parameter out of range, must be between 0 - 15\n");
+				ExitProcess(0);
+			}
+			cIdx++;
+		}
       else if( memcmp(argument, "-debug", 6)==0 )
       {
          // -debug
@@ -865,10 +882,10 @@ static void CacheAutoTuningWorkerThread(bool bEnabled)
    bOptimalL1SearchInProgress = true;
 
    DWORD startTime = GetTickCount();	
-   unsigned int nL1CacheElementsStart = 8 * sizeof(unsigned long) * 1000;
-   unsigned int nL1CacheElementsMax   = 2000000;
-   unsigned int nL1CacheElementsIncrement = 8 * sizeof(unsigned long) * 1000;
-   BYTE nSampleSeconds = 10;
+	unsigned int nL1CacheElementsStart = 64000;
+	unsigned int nL1CacheElementsMax   = 2560000;
+	unsigned int nL1CacheElementsIncrement = 64000;
+   BYTE nSampleSeconds = 20;
 
    unsigned int nL1CacheElements = primeStats.nL1CacheElements;
    std::map <unsigned int, unsigned int> mL1Stat;
@@ -933,7 +950,7 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
 
 
       // Auto Tuning for nPrimorialMultiplier
-      int nSampleSeconds = 3;
+      int nSampleSeconds = 15;
 
       while (true)
       {
@@ -993,14 +1010,17 @@ void PrintCurrentSettings()
    unsigned int seconds = uptime / (1000);
 
    printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");	
-   printf("Worker name: %s\n", commandlineInput.workername);
-   printf("Number of mining threads: %u\n", commandlineInput.numThreads);
-   printf("Sieve Size: %u\n", nMaxSieveSize);
-   printf("Sieve Percentage: %u\n", nSievePercentage);
-   printf("Round Sieve Percentage: %u\n", nRoundSievePercentage);
-   printf("Prime Limit: %u\n", commandlineInput.sievePrimeLimit);
-   printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
-   printf("L1CacheElements: %u\n", primeStats.nL1CacheElements);	
+	printf("Worker name (-u): %s\n", commandlineInput.workername);
+	printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
+	printf("Sieve Size (-s): %u\n", nMaxSieveSize);
+	printf("Sieve Percentage (-d): %u\n", nSievePercentage);
+	printf("Round Sieve Percentage (-r): %u\n", nRoundSievePercentage);
+	printf("Prime Limit (-primes): %u\n", commandlineInput.sievePrimeLimit);
+	printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
+	printf("L1CacheElements (-c): %u\n", primeStats.nL1CacheElements);	
+	printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
+	printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
+	printf("Sieve Extensions (-se): %u\n", nSieveExtensions);	
    printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
    printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
    printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n\n");
@@ -1346,7 +1366,7 @@ int main(int argc, char **argv)
    GetSystemInfo( &sysinfo );
    commandlineInput.numThreads = sysinfo.dwNumberOfProcessors;
    commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
-   commandlineInput.sieveSize = 1000000; // default maxSieveSize
+	commandlineInput.sieveSize = 1024000; // default maxSieveSize
    commandlineInput.sievePercentage = 10; // default 
    commandlineInput.roundSievePercentage = 70; // default 
    commandlineInput.enableCacheTunning = false;
@@ -1356,6 +1376,7 @@ int main(int argc, char **argv)
    commandlineInput.targetBTOverride = 0;
    commandlineInput.initialPrimorial = 61;
    commandlineInput.printDebug = 0;
+	commandlineInput.sieveExtensions = 7;
 
    commandlineInput.sievePrimeLimit = 0;
    // parse command lines
@@ -1366,6 +1387,7 @@ int main(int argc, char **argv)
    nRoundSievePercentage = commandlineInput.roundSievePercentage;
    nOverrideTargetValue = commandlineInput.targetOverride;
    nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+	nSieveExtensions = commandlineInput.sieveExtensions;
    if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
       commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
    primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
@@ -1391,8 +1413,8 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.1beta                   \xBA\n");
-   printf("\xBA     optimised from hg5fm (mumus) v7.1 build.                  \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.2beta                   \xBA\n");
+   printf("\xBA     optimised from hg5fm (mumus) v7.1 build + HP10 updates    \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA  contributors: x3maniac                                       \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
