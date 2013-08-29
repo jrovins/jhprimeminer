@@ -76,7 +76,7 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 
 #include"prime.h"
 #include"jsonrpc.h"
-#include"stats.h"
+//#include"stats.h"
 
 #ifdef _WIN32
 #include "mpirxx.h"

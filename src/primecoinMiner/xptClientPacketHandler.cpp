@@ -127,7 +127,7 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 
 	if(commandlineInput.csEnabled){
 //		notifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
-		NEWnotifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
+//		NEWnotifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
 	}
 	return true;
 }

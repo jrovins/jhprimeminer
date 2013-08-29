@@ -96,7 +96,7 @@ void NEWnotifyCentralServerofShare(uint32 shareErrorCode, float shareValue, char
 		fStr_buffer4kb_t fStrBuffer_parameter;
 		fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
 		//api key
-		fStr_appendFormatted(fStr_parameter, "[\"key\":\"%s\"", commandlineInput.csApiKey); // no ]
+		fStr_appendFormatted(fStr_parameter, "[\"key\":\"%c\"", commandlineInput.csApiKey); // no ]
 		
 		//shareErrorCode
 		fStr_appendFormatted(fStr_parameter, ",\"shareErrorCode\":\"%d\"", shareErrorCode);
@@ -106,7 +106,7 @@ void NEWnotifyCentralServerofShare(uint32 shareErrorCode, float shareValue, char
 
 		//reject reason
 		if( rejectReason[0] != '\0' ){
-			fStr_appendFormatted(fStr_parameter, ",\"rejectReason\":\"%s\"", rejectReason);
+			fStr_appendFormatted(fStr_parameter, ",\"rejectReason\":\"%c\"", rejectReason);
 				
 		}
 
