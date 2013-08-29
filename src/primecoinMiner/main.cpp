@@ -407,6 +407,7 @@ uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 */
 int jhMiner_workerThread_getwork(int threadIndex)
 {
+	CSieveOfEratosthenes* psieve = NULL;
    while( true )
    {
       uint8 localBlockData[128];
@@ -434,9 +435,15 @@ int jhMiner_workerThread_getwork(int threadIndex)
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
-      BitcoinMiner(&primecoinBlock, threadIndex);
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+         break;
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
+	}
    return 0;
 }
 
@@ -445,6 +452,7 @@ int jhMiner_workerThread_getwork(int threadIndex)
 */
 int jhMiner_workerThread_xpt(int threadIndex)
 {
+	CSieveOfEratosthenes* psieve = NULL;
    while( true )
    {
       uint8 localBlockData[128];
@@ -468,11 +476,16 @@ int jhMiner_workerThread_xpt(int threadIndex)
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
       //uint32 time1 = GetTickCount();
-      if (!BitcoinMiner(&primecoinBlock, threadIndex))
-         return 0;
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+         break;
       //printf("Mining stopped after %dms\n", GetTickCount()-time1);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
+	}
    return 0;
 }
 
@@ -794,81 +807,91 @@ void jhMiner_parseCommandline(int argc, char **argv)
    }
 }
 
-/*
-* Mainloop when using getwork() mode
-*/
-int jhMiner_main_getworkMode()
+typedef std::pair <DWORD, HANDLE> thMapKeyVal;
+DWORD * threadHearthBeat;
+
+static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 {
-   // start threads
-   for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
-      CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_getwork, (LPVOID)threadIdx, 0, 0);
-   // main thread, query work every 8 seconds
-   sint32 loopCounter = 0;
-   while( true )
+   DWORD maxIdelTime = 30 * 1000; // Allow 30 secs of "idle" time between heartbeats before a thread is deemed "dead".
+   std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
+   while(true)
    {
-      // query new work
-      jhMiner_queryWork_primecoin();
-      // calculate stats every second tick
-      if( loopCounter&1 )
+      if ((workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH) && (!IsXptClientConnected()))
       {
-         double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
-         if( statsPassedTime < 1.0 )
-            statsPassedTime = 1.0; // avoid division by zero
-         double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
-         primeStats.primeLastUpdate = GetTickCount();
-         primeStats.primeChainsFound = 0;
-         uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
-         primeStats.bestPrimeChainDifficulty = 0;
-         double primeDifficulty = (double)bestDifficulty / (double)0x1000000;
-         if( workData.workEntry[0].dataIsValid )
-         {
-            primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
-            printf("primes/s: %d best difficulty: %f record: %f\n", (sint32)primesPerSecond, (float)primeDifficulty, (float)primeStats.bestPrimeChainDifficultySinceLaunch);
-         }
-      }		
-      // wait and check some stats
-      uint32 time_updateWork = GetTickCount();
-      while( true )
-      {
-         uint32 passedTime = GetTickCount() - time_updateWork;
-         if( passedTime >= 4000 )
-            break;
-         Sleep(200);
+         // Miner is not connected, wait 5 secs before trying again.
+         Sleep(5000);
+         continue;
       }
-      loopCounter++;
+
+      DWORD currentTick = GetTickCount();
+
+      for (int i = 0; i < threadMap.size(); i++)
+      {
+         DWORD heartBeatTick = threadHearthBeat[i];
+         if (currentTick - heartBeatTick > maxIdelTime)
+         {
+            //restart the thread
+            printf("Restarting thread %d\n", i);
+            //__try
+            //{
+
+            //HANDLE h = threadMap.at(i);
+            thMap_Iter = threadMap.find(i);
+            if (thMap_Iter != threadMap.end())
+            {
+               HANDLE h = thMap_Iter->second;
+               TerminateThread( h, 0);
+               Sleep(1000);
+               CloseHandle(h);
+               Sleep(1000);
+               threadHearthBeat[i] = GetTickCount();
+               threadMap.erase(thMap_Iter);
+
+               h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
+               SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
+
+               threadMap.insert(thMapKeyVal(i,h));
+
+            }
+            /*}
+            __except(EXCEPTION_EXECUTE_HANDLER)
+            {
+            }*/
+         }
+      }
+      Sleep( 1*1000);
    }
-   return 0;
 }
 
 bool fIncrementPrimorial = true;
 
-void MultiplierAutoAdjust()
-{
-   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-   //printf( "ChainHit:  %f - PrevChainHit: %f - PrimorialMultiplier: %u\n", primeStats.nChainHit, primeStats.nPrevChainHit, primeStats.nPrimorialMultiplier);
-   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-
-   //bool fIncrementPrimorial = true;
-   if (primeStats.nChainHit == 0)
-      return;
-
-   if ( primeStats.nChainHit < primeStats.nPrevChainHit)
-      fIncrementPrimorial = !fIncrementPrimorial;
-
-   primeStats.nPrevChainHit = primeStats.nChainHit;
-   primeStats.nChainHit = 0;
-   // Primecoin: dynamic adjustment of primorial multiplier
-   if (fIncrementPrimorial)
-   {
-      if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
-         error("PrimecoinMiner() : primorial increment overflow");
-   }
-   else if (primeStats.nPrimorialMultiplier > 7)
-   {
-      if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
-         error("PrimecoinMiner() : primorial decrement overflow");
-   }
-}
+//void MultiplierAutoAdjust()
+//{
+//   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+//   //printf( "ChainHit:  %f - PrevChainHit: %f - PrimorialMultiplier: %u\n", primeStats.nChainHit, primeStats.nPrevChainHit, primeStats.nPrimorialMultiplier);
+//   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+//
+//   //bool fIncrementPrimorial = true;
+//   if (primeStats.nChainHit == 0)
+//      return;
+//
+//   if ( primeStats.nChainHit < primeStats.nPrevChainHit)
+//      fIncrementPrimorial = !fIncrementPrimorial;
+//
+//   primeStats.nPrevChainHit = primeStats.nChainHit;
+//   primeStats.nChainHit = 0;
+//   // Primecoin: dynamic adjustment of primorial multiplier
+//   if (fIncrementPrimorial)
+//   {
+//      if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
+//         error("PrimecoinMiner() : primorial increment overflow");
+//   }
+//   else if (primeStats.nPrimorialMultiplier > 7)
+//   {
+//      if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
+//         error("PrimecoinMiner() : primorial decrement overflow");
+//   }
+//}
 
 BYTE nRoundSievePercentage;
 bool bOptimalL1SearchInProgress = false;
@@ -974,6 +997,8 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
          //printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
          //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 
+         if (ratio == 0) continue; // No weaves occurred, don't change anything.
+
          if (ratio > nRoundSievePercentage + 5)
          {
             if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
@@ -982,7 +1007,7 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
          }
          else if (ratio < nRoundSievePercentage - 5)
          {
-            if ( primeStats.nPrimorialMultiplier >= 2)
+            if ( primeStats.nPrimorialMultiplier > 2)
             {
                if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
                   error("PrimecoinMiner() : primorial decrement overflow");
@@ -1113,57 +1138,66 @@ static void input_thread()
    return;
 }
 
-typedef std::pair <DWORD, HANDLE> thMapKeyVal;
-DWORD * threadHearthBeat;
-
-static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
+/*
+* Mainloop when using getwork() mode
+*/
+int jhMiner_main_getworkMode()
 {
-   DWORD maxIdelTime = 10 * 1000;
-   std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
-   while(true)
+   // start the Auto Tuning thread
+   CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
+   CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)RoundSieveAutoTuningWorkerThread, NULL, 0, 0);
+   CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
+
+   // start threads
+   // Although we create all the required heartbeat structures, there is no heartbeat watchdog in GetWork mode. 
+   std::map<DWORD, HANDLE> threadMap;
+   threadHearthBeat = (DWORD *)malloc( commandlineInput.numThreads * sizeof(DWORD));
+   // start threads
+   for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
    {
-      if (!IsXptClientConnected())
-         continue;
-      DWORD currentTick = GetTickCount();
-
-      for (int i = 0; i < threadMap.size(); i++)
-      {
-         DWORD heartBeatTick = threadHearthBeat[i];
-         if (currentTick - heartBeatTick > maxIdelTime)
-         {
-            //restart the thread
-            printf("Restarting thread %d\n", i);
-            //__try
-            //{
-
-            //HANDLE h = threadMap.at(i);
-            thMap_Iter = threadMap.find(i);
-            if (thMap_Iter != threadMap.end())
-            {
-               HANDLE h = thMap_Iter->second;
-               TerminateThread( h, 0);
-               Sleep(1000);
-               CloseHandle(h);
-               Sleep(1000);
-               threadHearthBeat[i] = GetTickCount();
-               threadMap.erase(thMap_Iter);
-
-               h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
-               SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
-
-               threadMap.insert(thMapKeyVal(i,h));
-
-            }
-            /*}
-            __except(EXCEPTION_EXECUTE_HANDLER)
-            {
-            }*/
-         }
-      }
-      Sleep( 1*1000);
+      HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_getwork, (LPVOID)threadIdx, 0, 0);
+      SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+      threadMap.insert(thMapKeyVal(threadIdx,hThread));
+      threadHearthBeat[threadIdx] = GetTickCount();
    }
-}
 
+   // main thread, query work every 8 seconds
+   sint32 loopCounter = 0;
+   while( true )
+   {
+      // query new work
+      jhMiner_queryWork_primecoin();
+      // calculate stats every second tick
+      if( loopCounter&1 )
+      {
+         double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
+         if( statsPassedTime < 1.0 )
+            statsPassedTime = 1.0; // avoid division by zero
+         double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
+         primeStats.primeLastUpdate = GetTickCount();
+         primeStats.primeChainsFound = 0;
+         uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
+         primeStats.bestPrimeChainDifficulty = 0;
+         double primeDifficulty = (double)bestDifficulty / (double)0x1000000;
+         if( workData.workEntry[0].dataIsValid )
+         {
+            primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
+            printf("primes/s: %d best difficulty: %f record: %f\n", (sint32)primesPerSecond, (float)primeDifficulty, (float)primeStats.bestPrimeChainDifficultySinceLaunch);
+         }
+      }		
+      // wait and check some stats
+      uint32 time_updateWork = GetTickCount();
+      while( true )
+      {
+         uint32 passedTime = GetTickCount() - time_updateWork;
+         if( passedTime >= 4000 )
+            break;
+         Sleep(200);
+      }
+      loopCounter++;
+   }
+   return 0;
+}
 
 /*
 * Mainloop when using xpt mode
@@ -1193,7 +1227,6 @@ int jhMiner_main_xptMode()
    // main thread, don't query work, just wait and process
    sint32 loopCounter = 0;
    uint32 xptWorkIdentifier = 0xFFFFFFFF;
-   uint32 time_multiAdjust = GetTickCount();
    //unsigned long lastFiveChainCount = 0;
    //unsigned long lastFourChainCount = 0;
    while( true )
@@ -1258,18 +1291,6 @@ int jhMiner_main_xptMode()
          uint32 tickCount = GetTickCount();
          uint32 passedTime = tickCount - time_updateWork;
 
-
-         if (tickCount - time_multiAdjust >= 60000)
-         {
-            MultiplierAutoAdjust();
-            time_multiAdjust = GetTickCount();
-         }
-
-         //if(tickCount - time_AvarageCalc >= 5*60*1000)
-         //{
-         //	//calculate 5 minute avarages
-         //}
-
          if( passedTime >= 4000 )
             break;
          xptClient_process(workData.xptClient);
@@ -1282,7 +1303,9 @@ int jhMiner_main_xptMode()
             printf("xpt: Disconnected, auto reconnect in 30 seconds\n");
             if( workData.xptClient && disconnectReason )
                printf("xpt: Disconnect reason: %s\n", disconnectReason);
+            
             Sleep(30*1000);
+
             if( workData.xptClient )
                xptClient_free(workData.xptClient);
             xptWorkIdentifier = 0xFFFFFFFF;
@@ -1327,7 +1350,7 @@ int jhMiner_main_xptMode()
                double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
                printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
                printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-               printf("Total/Valid shares: [ %d / %d ]  -  Max diff: %.06f\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
+               printf("Valid/Total shares: [ %d / %d ]  -  Max diff: %.06f\n", valid_shares, total_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
                statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
                for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
@@ -1413,7 +1436,7 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.2beta                   \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.3beta                   \xBA\n");
    printf("\xBA     optimised from hg5fm (mumus) v7.1 build + HP10 updates    \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA  contributors: x3maniac                                       \xBA\n");

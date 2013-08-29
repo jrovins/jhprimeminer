@@ -5,11 +5,9 @@
 #ifndef PRIMECOIN_PRIME_H
 #define PRIMECOIN_PRIME_H
 
-// Removed USE_ROTATE - Testing revealed while it was a good approximation that ran faster it
-// left too many candidates in sieve that cost more on testing than a full sieve operation costs.
-//#if defined(__i386__) || defined(_M_IX86) || defined(_X86_) || defined(__x86_64__) || defined(_M_X64)
-//#define USE_ROTATE
-//#endif
+#if defined(__i386__) || defined(_M_IX86) || defined(_X86_) || defined(__x86_64__) || defined(_M_X64)
+#define USE_ROTATE
+#endif
 
 #ifdef _M_X64
 typedef uint64 sieve_word_t;
@@ -479,13 +477,6 @@ public:
    //   True  - weaved another prime; nComposite - number of composites removed
    //   False - sieve already completed
    bool Weave();
-
-   void SetSievePercentage(unsigned int nNewSievePercentage)
-   {
-      this->nSievePercentage = nNewSievePercentage;
-      this->nTotalPrimes = vPrimes.size();
-      this->nPrimes = (uint64)nTotalPrimes * nSievePercentage / 100;
-   }
 };
 
 inline void mpz_set_uint256(mpz_t r, uint256& u)

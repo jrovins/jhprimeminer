@@ -843,7 +843,7 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;
 
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
+bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
                             unsigned int& nTests, unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier)
 {
 
@@ -877,20 +877,20 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       lSieveBTTarget = lSieveTarget; // Set to same as target
 
    //int64 nStart, nCurrent; // microsecond timer
-   if (*psieve == NULL)
+   if (psieve == NULL)
    {
       // Build sieve
-      *psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      (*psieve)->Weave();
+      psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
+      psieve->Weave();
    }
    else
    {
-      (*psieve)->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      (*psieve)->Weave();
+      psieve->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
+      psieve->Weave();
    }
 
    primeStats.nSieveRounds++;
-   primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
+   primeStats.nCandidateCount += psieve->GetCandidateCount();
 
    mpz_class mpzHashMultiplier = mpzHash * mpzFixedMultiplier;
    mpz_class mpzChainOrigin;
@@ -913,37 +913,22 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    //uint32 timeStop = GetTickCount() + 25000;
    //int nTries = 0;
    bool multipleShare = false;
-   bool sieveRescan = false;
    mpz_class mpzPrevPrimeChainMultiplier = 0;
 
    bool rtnValue = false;
 
-   bool bFullScan = false;
-
    uint32 start = GetTickCount();
-   //while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
-      nTests++;
-      if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nCandidateType))
+      if (!psieve->GetNextCandidateMultiplier(nTriedMultiplier, nCandidateType))
       {			
-         if (!sieveRescan && bFullScan)
-         {
-            //fast rescan for more shares.
-            (*psieve)->SetSievePercentage(100); //100%
-            (*psieve)->Weave();
-            sieveRescan = true;
-            continue;
-         }
-         else
-         {
-            // power tests completed for the sieve
-            fNewBlock = true; // notify caller to change nonce
-            rtnValue = false;
-            break;
-         }
+         // power tests completed for the sieve
+         fNewBlock = true; // notify caller to change nonce
+         rtnValue = false;
+         break;
       }
 
+      nTests++;
       mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier;		
       nChainLength = 0;		
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
@@ -961,39 +946,20 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          continue;
       }
 
-      if (shareDifficultyMajor >= 6)
-      {				
-         //if (!sieveRescan)
-         //{				
-         primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         //if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
-         primeStats.nChainHit++;
-         //}
-         // do a 100% rescan of the sieve for higer shares
-         //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
-         //{
-         //	bFullScan = true;
-         //}
-      }
-      //if( nProbableChainLength > 0x03000000 )
-      //	primeStats.qualityPrimesFound++;
       if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
          primeStats.bestPrimeChainDifficulty = nProbableChainLength;
 
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
+         // Update Stats
+         primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+         primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+         primeStats.nChainHit++;
+
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier;
 
          if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             continue;
-
-         //if (sieveRescan)
-         //{
-         //		// count the chains also on rescan
-         //    primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         //    primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         // }
 
          // update server data
          block->serverData.client_shareBits = nProbableChainLength;
@@ -1684,7 +1650,7 @@ bool CSieveOfEratosthenes::Weave()
                   vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
                }
             }
-            else if (nLayerSeq < nBiTwinCC2Layers)
+            else if (nLayerSeq < nBiTwinCC1Layers)
             {
                for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
                {
@@ -1722,7 +1688,7 @@ bool CSieveOfEratosthenes::Weave()
                      vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
                   }
                }
-               else if (nLayerExtendedSeq < nBiTwinCC2Layers)
+               else if (nLayerExtendedSeq < nBiTwinCC1Layers)
                {
                   for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
                   {
