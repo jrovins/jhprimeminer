@@ -286,6 +286,17 @@ int esprintf_c(char *out, char value, int padRight, int padZero, int width)
 	return 1;
 }
 
+
+int esprintf_B(char *out, bool value, int padRight, int padZero, int width) //Boolean
+{
+	if(value){
+		*out = '1';
+	}else{
+		*out = '0';
+	}
+	return 1;
+}
+
 int esprintf_b(char *out, signed long long value, int padRight, int padZero, int width) //"Big" - signed long long
 {
 	//int c = 0; unused
@@ -544,7 +555,7 @@ void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *par
 					p++;
 				}
 				//Now check case
-#ifdef _WIN64
+
 				if( *p == 'd' ) //signed integer
 				{
 					o += esprintf_d(o, *(sint64*)param, PadRight, PadZero, Width); param++;
@@ -571,7 +582,11 @@ void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *par
 				{
 					o += esprintf_b(o, *(signed long long*)param, PadRight, PadZero, Width); param += 2;
 				}
-				else if( *p == 's' ) //signed integer
+				else if( *p == 'B' ) //boolean
+				{
+					o += esprintf_B(o, *(bool*)param, PadRight, PadZero, Width); param++;
+				}
+				else if( *p == 's' ) //string
 				{
 					o += esprintf_s(o, (char*)*(char**)param, PadRight, PadZero, Width); param++;
 				}
@@ -589,52 +604,7 @@ void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *par
 					p += 1;
 				}
 				p++;
-#else
-				if( *p == 'd' ) //signed integer
-				{
-					o += esprintf_d(o, *(signed int*)param, PadRight, PadZero, Width); param++;
-				}
-				else if( p[0] == 'u' && p[1] == 't' && p[2] == 'f' && p[3] == '8' ) //utf8 string
-				{
-					o += esprintf_utf8(o, (char*)*(unsigned int*)param, PadRight, PadZero, Width); param++;
-					p += 3;
-				}
-				else if( p[0] == 'x' && p[1] == 'u' && p[2] == 't' && p[3] == 'f' && p[4] == '8' ) //hex-encoded utf8 string
-				{
-					o += esprintf_xutf8(o, (char*)*(unsigned int*)param, PadRight, PadZero, Width); param++;
-					p += 4;
-				}
-				else if( *p == 'u' ) //signed integer
-				{
-					o += esprintf_u(o, *(unsigned int*)param, PadRight, PadZero, Width); param++;
-				}
-				else if( *p == 'c' ) //signed ascii char
-				{
-					o += esprintf_c(o, *(char*)param, PadRight, PadZero, Width); param++;
-				}
-				else if( *p == 'b' ) //signed long integer
-				{
-					o += esprintf_b(o, *(signed long long*)param, PadRight, PadZero, Width); param += 2;
-				}
-				else if( *p == 's' ) //signed integer
-				{
-					o += esprintf_s(o, (char*)*(char**)param, PadRight, PadZero, Width); param++;
-				}
-				else if( *p == 'X' ) //unsigned integer as hex
-				{
-					o += esprintf_X(o, *(unsigned int*)param, PadRight, PadZero, Width, 1); param++;
-				}
-				else if( *p == 'x' ) //unsigned integer as hex
-				{
-					o += esprintf_X(o, *(unsigned int*)param, PadRight, PadZero, Width, 0); param++;
-				}
-				else if( p[0] == 'h' && p[1] == 'f' ) // helper float
-				{
-					o += esprintf_hf(o, (float)*(double*)param, PadRight, PadZero, Width); param++;
-					p += 1;
-				}
-				p++;
-#endif
+
 			}
 
 		}
@@ -662,11 +632,7 @@ void esprintf(char *out, char *format, ...)
 		unsigned int formattedLength = 0;
 		_esprintf(out, format, param, &formattedLength);
 	#else
-	#ifdef _WIN32
-		unsigned int *param = (unsigned int*)_ADDRESSOF(format);
-	#else
 		unsigned int *param = (unsigned int*)tmp_addressof(format);
-	#endif
 		param++; // skip first parameter
 		unsigned int formattedLength = 0;
 		_esprintf(out, format, param, &formattedLength);

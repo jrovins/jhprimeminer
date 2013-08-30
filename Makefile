@@ -1,8 +1,8 @@
 CXX = g++
-CFLAGS = -mtune=native -O3 -Wall -Wextra -std=c++0x
+CFLAGS = -mtune=native -O3 -Wall -Wextra -std=c++0x -fomit-frame-pointer
 
 OSVERSION := $(shell uname -s)
-LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread
+LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread -lcurl
 
 ifeq ($(OSVERSION),Linux)
 	LIBS += -lrt
@@ -40,6 +40,7 @@ OBJS = \
 	src/primecoinMiner/prime.o \
 	src/primecoinMiner/main.o \
 	src/primecoinMiner/miner.o \
+	src/primecoinMiner/stats.o \
 	src/primecoinMiner/ripemd160.o \
 	src/primecoinMiner/sha256.o \
 	src/primecoinMiner/xptClient.o \

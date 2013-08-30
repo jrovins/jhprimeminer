@@ -141,6 +141,9 @@
     <ClCompile Include="ticker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="stats.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bignum2.h">
@@ -447,6 +450,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ticker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stats.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -135,7 +135,7 @@ void fStr_copy(fStr_t* fStr, char *sourceASCII)
 #ifdef _WIN32
 		OutputDebugString("fStr: Bufferoverflow detected");
 #endif
-		exit(-32001);
+		exit(-32002);
 	}
 }
 
@@ -186,7 +186,8 @@ int fStr_appendFormatted(fStr_t* fStr, char *format, ...)
 #ifdef _WIN64
 	uint64 *param = (uint64*)_ADDRESSOF(format);
 	param++; // skip first parameter
-	unsigned int formattedLength = 0;	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
+	unsigned int formattedLength = 0;
+	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
 #else
 #ifdef _WIN32
 	unsigned int *param = (unsigned int*)_ADDRESSOF(format);
@@ -195,6 +196,8 @@ int fStr_appendFormatted(fStr_t* fStr, char *format, ...)
 #endif
 	param++; // skip first parameter
 	unsigned int formattedLength = 0;
+printf("Param: %u\n", (char*)*(char**)param);
+
 	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
 #endif
 	fStr->length += formattedLength;

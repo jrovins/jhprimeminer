@@ -54,7 +54,7 @@ bool xptClient_processPacket_blockData1(xptClient_t* xptClient)
 	xptClient->blockWorkInfo.nBits = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);			// nBits
 	xptClient->blockWorkInfo.nBitsShare = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);		// nBitsRecommended / nBitsShare
 //@TODO: REMOVE BEFORE PUSH
-//	xptClient->blockWorkInfo.nBitsShare = 0x05000000;		// nBitsRecommended / nBitsShare
+	xptClient->blockWorkInfo.nBitsShare = 0x05000000;		// nBitsRecommended / nBitsShare
 
 	xptClient->blockWorkInfo.nTime = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);			// nTimestamp
 	xptPacketbuffer_readData(xptClient->recvBuffer, xptClient->blockWorkInfo.prevBlock, 32, &recvError);	// prevBlockHash
@@ -126,8 +126,7 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 	}
 
 	if(commandlineInput.csEnabled){
-//		notifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
-//		NEWnotifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
+		NEWnotifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
 	}
 	return true;
 }

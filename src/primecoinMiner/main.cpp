@@ -196,6 +196,18 @@ void primecoinBlock_generateBlockHash(primecoinBlock_t* primecoinBlock, uint8 ha
 	sha256_finish(&ctx, hashOutput);
 }
 
+
+#define MINER_PROTOCOL_GETWORK		(1)
+#define MINER_PROTOCOL_STRATUM		(2)
+#define MINER_PROTOCOL_XPUSHTHROUGH	(3)
+
+
+jsonRequestTarget_t jsonRequestTarget; // rpc login data
+jsonRequestTarget_t statsRequestTarget = {0}; // rpc login data
+jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
+bool useLocalPrimecoindForLongpoll;
+
+
 typedef struct  
 {
 	bool dataIsValid;
@@ -218,16 +230,7 @@ typedef struct
 	xptClient_t* xptClient;
 }workData_t;
 
-#define MINER_PROTOCOL_GETWORK		(1)
-#define MINER_PROTOCOL_STRATUM		(2)
-#define MINER_PROTOCOL_XPUSHTHROUGH	(3)
-
 workData_t workData;
-
-jsonRequestTarget_t jsonRequestTarget; // rpc login data
-jsonRequestTarget_t statsRequestTarget; // rpc login data
-jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
-bool useLocalPrimecoindForLongpoll;
 
 
 /*
@@ -975,7 +978,7 @@ void *CacheAutoTuningWorkerThread(void * arg)
 	}
 }
 
-bool bEnablenPrimorialMultiplierTuning = true;
+bool bEnablenPrimorialMultiplierTuning;
 
 #ifdef _WIN32
 int RoundSieveAutoTuningWorkerThread(void)
@@ -988,7 +991,7 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 
 		while (true && !xptClient_isDisconnected(workData.xptClient, NULL))
 		{
-			if (!bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning){
+			if (!bOptimalL1SearchInProgress || bEnablenPrimorialMultiplierTuning){
 			primeStats.nWaveTime = 0;
 			primeStats.nWaveRound = 0;
 			primeStats.nTestTime = 0;
@@ -1434,7 +1437,8 @@ int jhMiner_main_xptMode()
                printf("Share Value submitted - Last Block/Total: %0.6f / %0.6f\n", primeStats.fBlockShareValue, primeStats.fTotalSubmittedShareValue);
                printf("Current Primorial Value: %u\n", primeStats.nPrimorialMultiplier);
                printf("--------------------------------------------------------------------------------\n");
-
+			if(commandlineInput.csEnabled)
+			   NEWnotifyStats();
 					primeStats.fBlockShareValue = 0;
 						multiplierSet.clear();
 				}
@@ -1606,8 +1610,10 @@ commandlineInput.targetOverride = 0;
   char ipText[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &((struct sockaddr_in *)res->ai_addr)->sin_addr, ipText, INET_ADDRSTRLEN);
 #endif
-  		statsRequestTarget.ip = commandlineInput.centralServer;
+  		statsRequestTarget.ip = ipText;
 		statsRequestTarget.port = commandlineInput.centralServerPort;
+		statsRequestTarget.authPass = "";
+		statsRequestTarget.authUser = "";
 	}
 
 	// init stats
