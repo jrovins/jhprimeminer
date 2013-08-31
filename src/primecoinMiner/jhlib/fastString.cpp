@@ -1,5 +1,8 @@
 #include"./JHLib.h"
 #include<stdio.h>
+#include <cstdarg>
+#include <iostream>
+
 #ifndef _WIN32
 #include <cstdlib>
 #endif
@@ -183,25 +186,151 @@ void fStr_append(fStr_t* fStr, fStr_t* source)
 int fStr_appendFormatted(fStr_t* fStr, char *format, ...)
 {
 	// use some dirty trick to access varying arguments
-#ifdef _WIN64
-	uint64 *param = (uint64*)_ADDRESSOF(format);
-	param++; // skip first parameter
 	unsigned int formattedLength = 0;
-	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
-#else
-#ifdef _WIN32
-	unsigned int *param = (unsigned int*)_ADDRESSOF(format);
-#else
-	unsigned int *param = (unsigned int*)tmp_addressof(format);
-#endif
-	param++; // skip first parameter
-	unsigned int formattedLength = 0;
-printf("Param: %u\n", (char*)*(char**)param);
 
-	_esprintf((char*)(fStr->str + fStr->length), format, param, &formattedLength);
-#endif
+	va_list arguments;
+	va_start ( arguments, format );           // Initializing arguments to store all values after format
+
+	//Do parsing
+	char *p = format;
+	char *out = (char*)(fStr->str + fStr->length);
+	char *o = out;
+	while(*p)
+	{
+		if( *p == '%' )
+		{
+			p++;
+			if( *p == '%' )
+			{
+				*o = *p;
+				p++;
+				o++;
+			}
+			else
+			{
+				//Parse format
+				//%[-][#][0][width][.precision]type
+				int PadRight = 0;
+				int AutoPrefix = 0;
+				int PadZero = 0;
+				int Width = -1;
+				int Precision = 1337;
+				//PadRight
+				if( *p == '-' )
+				{
+					PadRight = 1;
+					p++;
+				}
+				//AutoPrefix
+				if( *p == '#' )
+				{
+					AutoPrefix = 1;
+					p++;
+				}
+				//ZeroPad
+				if( *p == '0' )
+				{
+					PadZero = 1;
+					p++;
+				}
+				//Width (2 digits at max)
+				if( *p >= '0' && *p <= '9' )
+				{
+					Width = *p-'0';
+					p++;
+					if( *p >= '0' && *p <= '9' )
+					{
+						Width = Width*10 + (*p-'0');
+						p++;
+					}
+				}
+				//Precision
+				if( *p == '.' )
+				{
+					p++;
+					Precision = *p-'0';
+					p++;
+					if( *p >= '0' && *p <= '9' )
+					{
+						Precision = Precision*10 + (*p-'0');
+						p++;
+					}
+				}
+				//Parse type
+				int LongMode = 0;
+				if( *p == 'l' )
+				{
+					LongMode = 1;
+					p++;
+				}
+				//Now check case
+
+				if( *p == 'd' ) //signed integer
+				{
+					o += esprintf_d(o, va_arg(arguments,sint64), PadRight, PadZero, Width);
+				}
+				else if( p[0] == 'u' && p[1] == 't' && p[2] == 'f' && p[3] == '8' ) //utf8 string
+				{
+					
+					o += esprintf_utf8(o, va_arg(arguments,char*), PadRight, PadZero, Width);
+					p += 3;
+				}
+				else if( p[0] == 'x' && p[1] == 'u' && p[2] == 't' && p[3] == 'f' && p[4] == '8' ) //hex-encoded utf8 string
+				{
+					o += esprintf_xutf8(o, va_arg(arguments,char*), PadRight, PadZero, Width);
+					p += 4;
+				}
+				else if( *p == 'u' ) //signed integer
+				{
+					o += esprintf_u(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width);
+				}
+				else if( *p == 'c' ) //signed ascii char
+				{
+					o += esprintf_c(o, va_arg(arguments,int), PadRight, PadZero, Width);
+				}
+				else if( *p == 'b' ) //signed long integer
+				{
+					o += esprintf_b(o, va_arg(arguments,signed long long), PadRight, PadZero, Width);
+				}
+				else if( *p == 'B' ) //boolean
+				{
+					o += esprintf_B(o, va_arg(arguments,int), PadRight, PadZero, Width);
+				}
+				else if( *p == 's' ) //string
+				{
+					o += esprintf_s(o, va_arg(arguments,char*), PadRight, PadZero, Width);
+				}
+				else if( *p == 'X' ) //unsigned integer as hex
+				{
+					o += esprintf_X(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width, 1);
+				}
+				else if( *p == 'x' ) //unsigned integer as hex
+				{
+					o += esprintf_X(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width, 0);
+				}
+				else if( p[0] == 'h' && p[1] == 'f' ) // helper float
+				{
+					o += esprintf_hf(o, va_arg(arguments,double), PadRight, PadZero, Width);
+					p += 1;
+				}
+				p++;
+
+			}
+
+		}
+		else
+		{
+			*o = *p;
+			p++;
+			o++;
+		}
+	}
+	*o = '\0';
+	va_end(arguments);
+	formattedLength = (unsigned int)(o-out);
 	fStr->length += formattedLength;
 	return formattedLength;
+
 }
 
 /* format specific - ASCII */

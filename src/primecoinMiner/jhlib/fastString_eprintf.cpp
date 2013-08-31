@@ -1,4 +1,7 @@
 #include"./JHLib.h"
+#include <cstdarg>
+#include <iostream>
+
 // #include"fastString.h"
 
 static char esprintf_HEX_LOWER[16] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
@@ -474,15 +477,32 @@ int esprintf_X(char *out, unsigned int value, int padRight, int padZero, int wid
  * Param = pointer to parameters used for format insertion
  */
 #ifdef _WIN64
-void __cdecl _esprintf(char *out, char *format, uint64 *param, unsigned int *lengthOut)
+void __cdecl _esprintf(char *out, char *format, unsigned int *lengthOut)
 #elif defined (_WIN32)
-void __cdecl _esprintf(char *out, char *format, unsigned int *param, unsigned int *lengthOut)
+void __cdecl _esprintf(char *out, char *format, unsigned int *lengthOut)
 #else // gcc
-void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *param, unsigned int *lengthOut) 
+void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *lengthOut) 
 #endif
 {
-	if( lengthOut )
-		*lengthOut = 0;
+
+}
+
+void esprintf(char *out, char *format, ...)
+{
+	// use some dirty trick to access varying arguments
+	//unsigned int *param = (unsigned int*)_ADDRESSOF(format);
+	//param++; // skip first parameter
+	//_esprintf(out, format, param, NULL);
+	#ifdef _WIN64
+		uint64 *param = (uint64*)_ADDRESSOF(format);
+		param++; // skip first parameter
+		unsigned int formattedLength = 0;
+		_esprintf(out, format, param, &formattedLength);
+	#else
+	va_list arguments;
+	va_start ( arguments, format );           // Initializing arguments to store all values after format
+
+	unsigned int *lengthOut = 0;
 	//Do parsing
 	char *p = format;
 	char *o = out;
@@ -558,49 +578,50 @@ void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *par
 
 				if( *p == 'd' ) //signed integer
 				{
-					o += esprintf_d(o, *(sint64*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_d(o, va_arg(arguments,sint64), PadRight, PadZero, Width);
 				}
 				else if( p[0] == 'u' && p[1] == 't' && p[2] == 'f' && p[3] == '8' ) //utf8 string
 				{
-					o += esprintf_utf8(o, (char*)*(unsigned int*)param, PadRight, PadZero, Width); param++;
+					
+					o += esprintf_utf8(o, va_arg(arguments,char*), PadRight, PadZero, Width);
 					p += 3;
 				}
 				else if( p[0] == 'x' && p[1] == 'u' && p[2] == 't' && p[3] == 'f' && p[4] == '8' ) //hex-encoded utf8 string
 				{
-					o += esprintf_xutf8(o, (char*)*(unsigned int*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_xutf8(o, va_arg(arguments,char*), PadRight, PadZero, Width);
 					p += 4;
 				}
 				else if( *p == 'u' ) //signed integer
 				{
-					o += esprintf_u(o, *(unsigned int*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_u(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width);
 				}
 				else if( *p == 'c' ) //signed ascii char
 				{
-					o += esprintf_c(o, *(char*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_c(o, va_arg(arguments,char), PadRight, PadZero, Width);
 				}
 				else if( *p == 'b' ) //signed long integer
 				{
-					o += esprintf_b(o, *(signed long long*)param, PadRight, PadZero, Width); param += 2;
+					o += esprintf_b(o, va_arg(arguments,signed long long), PadRight, PadZero, Width);
 				}
 				else if( *p == 'B' ) //boolean
 				{
-					o += esprintf_B(o, *(bool*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_B(o, va_arg(arguments,bool), PadRight, PadZero, Width);
 				}
 				else if( *p == 's' ) //string
 				{
-					o += esprintf_s(o, (char*)*(char**)param, PadRight, PadZero, Width); param++;
+					o += esprintf_s(o, va_arg(arguments,char*), PadRight, PadZero, Width);
 				}
 				else if( *p == 'X' ) //unsigned integer as hex
 				{
-					o += esprintf_X(o, *(unsigned int*)param, PadRight, PadZero, Width, 1); param++;
+					o += esprintf_X(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width, 1);
 				}
 				else if( *p == 'x' ) //unsigned integer as hex
 				{
-					o += esprintf_X(o, *(unsigned int*)param, PadRight, PadZero, Width, 0); param++;
+					o += esprintf_X(o, va_arg(arguments,unsigned int), PadRight, PadZero, Width, 0);
 				}
 				else if( p[0] == 'h' && p[1] == 'f' ) // helper float
 				{
-					o += esprintf_hf(o, (float)*(double*)param, PadRight, PadZero, Width); param++;
+					o += esprintf_hf(o, va_arg(arguments,float), PadRight, PadZero, Width);
 					p += 1;
 				}
 				p++;
@@ -618,25 +639,9 @@ void __attribute__((cdecl)) _esprintf(char *out, char *format, unsigned int *par
 	*o = '\0';
 	if( lengthOut )
 		*lengthOut = (unsigned int)(o-out);
-}
+	va_end(arguments);
 
-void esprintf(char *out, char *format, ...)
-{
-	// use some dirty trick to access varying arguments
-	//unsigned int *param = (unsigned int*)_ADDRESSOF(format);
-	//param++; // skip first parameter
-	//_esprintf(out, format, param, NULL);
-	#ifdef _WIN64
-		uint64 *param = (uint64*)_ADDRESSOF(format);
-		param++; // skip first parameter
-		unsigned int formattedLength = 0;
-		_esprintf(out, format, param, &formattedLength);
-	#else
-		unsigned int *param = (unsigned int*)tmp_addressof(format);
-		param++; // skip first parameter
-		unsigned int formattedLength = 0;
-		_esprintf(out, format, param, &formattedLength);
-	#endif
+#endif
 
 }
 

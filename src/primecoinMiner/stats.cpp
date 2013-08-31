@@ -81,8 +81,8 @@ void NEWnotifyStats(){
 	
 	fStr_buffer4kb_t fStrBuffer_parameter;
 		fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
-		fStr_appendFormatted(fStr_parameter, "[\"key\":\"%c\"", commandlineInput.csApiKey); 
-	/*	fStr_appendFormatted(fStr_parameter, ",\"workerid\":\"%c\"", jsonRequestTarget.authUser);
+		fStr_appendFormatted(fStr_parameter, "[\"key\":\"%s\"", commandlineInput.csApiKey); 
+		fStr_appendFormatted(fStr_parameter, ",\"workerid\":\"%s\"", jsonRequestTarget.authUser);
 		fStr_appendFormatted(fStr_parameter, ",\"start\":\"%u\"", primeStats.startTime);
 		fStr_appendFormatted(fStr_parameter, ",\"blockstart\":\"%u\"", primeStats.primeLastUpdate);
 		fStr_appendFormatted(fStr_parameter, ",\"now\":\"%u\"", (uint64)getTimeMilliseconds());
@@ -94,7 +94,7 @@ void NEWnotifyStats(){
 		for(int i=2; i<=std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++){
 			fStr_appendFormatted(fStr_parameter,",\"ch[%d]\":\"%d\"", i, primeStats.chainCounter[0][i]);
 		}
-		*/
+	
 		fStr_append(fStr_parameter, "]"); // finish constructing the request
 
 		printf("JSON String: %s\n", fStr_get(fStr_parameter));

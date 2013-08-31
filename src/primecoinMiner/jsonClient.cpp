@@ -147,7 +147,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	// build json request data
 	// example: {"method": "getwork", "params": [], "id":0}
 	fStr_t* fStr_jsonRequestData = fStr_alloc(1024*512); // 64KB (this is also used as the recv buffer!)
-	fStr_appendFormatted(fStr_jsonRequestData, "{\"method\": \"%c\", \"params\": ", methodName);
+	fStr_appendFormatted(fStr_jsonRequestData, "{\"method\": \"%s\", \"params\": ", methodName);
 	//jsonBuilder_buildObjectString(fStr_jsonRequestData, jsonObjectParameter);
 	if( fStr_parameterData )
 		fStr_append(fStr_jsonRequestData, fStr_parameterData);
@@ -164,14 +164,14 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		char authString[256];
 		char authStringEncoded[512];
 		if( server->authPass )
-			sprintf(authString, "%c:%c", server->authUser, server->authPass);
+			sprintf(authString, "%s:%s", server->authUser, server->authPass);
 		else
-			sprintf(authString, "%c", server->authUser); // without password
+			sprintf(authString, "%s", server->authUser); // without password
 		sint32 base64EncodedLength = base64_encode((const unsigned char*)authString, fStrLen(authString), authStringEncoded);
 		authStringEncoded[base64EncodedLength] = '\0';
-		fStr_appendFormatted(fStr_headerData, "Authorization: Basic %c\r\n", authStringEncoded);
+		fStr_appendFormatted(fStr_headerData, "Authorization: Basic %s\r\n", authStringEncoded);
 	}
-	fStr_appendFormatted(fStr_headerData, "Host: %c:%d\r\n", server->ip, (sint32)server->port);
+	fStr_appendFormatted(fStr_headerData, "Host: %s:%d\r\n", server->ip, (sint32)server->port);
 	fStr_appendFormatted(fStr_headerData, "User-Agent: ypoolbackend 0.1\r\n");
 	fStr_appendFormatted(fStr_headerData, "Content-Type: application/json\r\n");
 	fStr_appendFormatted(fStr_headerData, "Content-Length: %d\r\n", fStr_len(fStr_jsonRequestData));
