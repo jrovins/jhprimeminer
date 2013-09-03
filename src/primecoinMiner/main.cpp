@@ -1201,9 +1201,17 @@ DWORD * threadHearthBeat;
 static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 {
 	DWORD maxIdelTime = 10 * 1000;
+   DWORD maxTimeBetweenShareSubmit = 30 * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
 	std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
 		while(true)
 		{
+	  if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds())
+	  {
+		// Something must be wrong, no accepted shares for a long time
+		printf ("Error - Watchdog - No accepted shares for too long!");
+		exit (EXIT_FAILURE);		// Quit the application - It WOULD be better to reinitialize the entire application
+	  }
+
 			if (!IsXptClientConnected())
 				continue;
 			uint64 currentTick = getTimeMilliseconds();
@@ -1259,12 +1267,20 @@ int jhMiner_main_xptMode()
   }
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)RoundSieveAutoTuningWorkerThread, NULL, 0, 0);
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
+
+
+   std::map<DWORD, HANDLE> threadMap;
+   threadHearthBeat = (DWORD *)malloc( commandlineInput.numThreads * sizeof(DWORD));
 	// start threads
 	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
 	{
 		HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)threadIdx, 0, 0);
 		SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+      threadMap.insert(thMapKeyVal(threadIdx,hThread));
+      threadHearthBeat[threadIdx] = GetTickCount();
 	}
+ CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watchdog_thread, (LPVOID)&threadMap, 0, 0);
+
 #else
  uint32_t totalThreads = commandlineInput.numThreads + 2;
   pthread_t threads[totalThreads];
