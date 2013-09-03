@@ -15,6 +15,7 @@ bool nPrintDebugMessages;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 char* dt;
+DWORD lastShareSubmit = GetTickCount();		// Lets pretend something was submitted at start - to not reset too soon!
 
 bool error(const char *format, ...)
 {
@@ -217,6 +218,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
             //printf("Valid share found!");
             //printf("[ %d / %d ] %s",valid_shares, total_shares,dt);
             jsonObject_freeObject(jsonReturnValue);
+			lastShareSubmit = GetTickCount();		// Update the watchdog2 timer
             return true;
          }
          else
@@ -1119,10 +1121,18 @@ DWORD * threadHearthBeat;
 static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 {
    DWORD maxIdelTime = 10 * 1000;
+   DWORD maxTimeBetweenShareSubmit = 30 * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
    std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
    while(true)
    {
-      if (!IsXptClientConnected())
+	  if (lastShareSubmit+maxTimeBetweenShareSubmit < GetTickCount())
+	  {
+		// Something must be wrong, no accepted shares for a long time
+		printf ("Error - Watchdog - No accepted shares for too long!");
+		exit (EXIT_FAILURE);		// Quit the application - It WOULD be better to reinitialize the entire application
+	  }
+
+	  if (!IsXptClientConnected())
          continue;
       DWORD currentTick = GetTickCount();
 
