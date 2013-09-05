@@ -750,7 +750,8 @@ void jhMiner_parseCommandline(int argc, char **argv)
  */
 int jhMiner_main_getworkMode()
 {
-	// start threads
+	threadHearthBeat = (DWORD *)malloc( commandlineInput.numThreads * sizeof(DWORD));
+	// start threads	
 	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
 		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_getwork, (LPVOID)threadIdx, 0, 0);
 	// main thread, query work every 8 seconds
