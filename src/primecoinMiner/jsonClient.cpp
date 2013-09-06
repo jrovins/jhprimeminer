@@ -142,6 +142,19 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		return NULL;
 	}
 
+
+#ifdef _WIN32
+	// set socket as non-blocking
+	unsigned int nonblocking=1;
+	unsigned int cbRet;
+	WSAIoctl(serverSocket, FIONBIO, &nonblocking, sizeof(nonblocking), NULL, 0, (LPDWORD)&cbRet, NULL, NULL);
+#else
+  int flags, err;
+  flags = fcntl(serverSocket, F_GETFL, 0); 
+  flags |= O_NONBLOCK;
+  err = fcntl(serverSocket, F_SETFL, flags); //ignore errors for now..
+#endif
+
 	//uint32 startTime = GetTickCount(); // todo: Replace with crossplatform method
 //  uint64 startTime = getTimeMilliseconds();   unused
 	// build json request data
@@ -173,6 +186,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	}
 	fStr_appendFormatted(fStr_headerData, "Host: %s:%d\r\n", server->ip, (sint32)server->port);
 	fStr_appendFormatted(fStr_headerData, "User-Agent: ypoolbackend 0.1\r\n");
+	fStr_appendFormatted(fStr_headerData, "Accept-Encoding: identity\r\n");
 	fStr_appendFormatted(fStr_headerData, "Content-Type: application/json\r\n");
 	fStr_appendFormatted(fStr_headerData, "Content-Length: %d\r\n", fStr_len(fStr_jsonRequestData));
 	fStr_appendFormatted(fStr_headerData, "\r\n"); // empty line concludes the header
@@ -208,7 +222,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		struct timeval tv;
 		FD_ZERO(&fds) ;
 		FD_SET(serverSocket, &fds) ;
-		tv.tv_sec = 30; // timeout 60 seconds after the last recv
+		tv.tv_sec = 10; // timeout 10 seconds after the last recv
 		tv.tv_usec = 0;
 		// wait until timeout or data received.
 		n = select(serverSocket, &fds, NULL, NULL, &tv ) ;
@@ -348,6 +362,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 			}
 		}
 	}
+
 	if( recvDataHeaderEnd != 0 )
 	{
 		// close connection (we kind of force this)
@@ -383,6 +398,8 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		// return parsed object
 		return jsonObjectReturn;
 	}
+
+
 	// close connection
 	if( serverSocket != 0 )
 	{
@@ -393,6 +410,8 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 #endif
 		serverSocket = 0;
 	}
+
+
 	// free everything again
 	fStr_free(fStr_jsonRequestData);
 	return NULL;

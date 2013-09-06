@@ -56,7 +56,8 @@ void GeneratePrimeTable(unsigned int nSieveSize)
    for (unsigned int n = 2; n < nPrimeTableLimit; n++)
       if (!vfComposite[n])
          vPrimes.push_back(n);
-   printf("GeneratePrimeTable() : prime table [1, %d] generated with %lu primes\n", nPrimeTableLimit, vPrimes.size());
+	if(!commandlineInput.silent && !commandlineInput.quiet)
+	   std::cout << "GeneratePrimeTable() : prime table [1, " << nPrimeTableLimit << "] generated with " << vPrimes.size() << " primes" << std::endl;
    vPrimesSize = vPrimes.size();  
 }
 
@@ -1033,15 +1034,22 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          strftime (sNow, 80, "%x-%X",timeinfo);
 
 		float shareDiff = GetChainDifficulty(nProbableChainLength);
+		if(!commandlineInput.silent)
+	        std::cout << sNow << " - SHARE FOUND! - (Th#:" << threadIndex << ") - DIFF:" << shareDiff << " - TYPE:" << nCandidateType << std::endl;
 
-         printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
+		primeStats.lastShareThreadIndex = threadIndex;
+		primeStats.lastShareDiff = shareDiff;
+		primeStats.lastShareType = nCandidateType;
+
+
+
          if (nPrintDebugMessages)
          {
             printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());
             printf("\nFixedMultiplier: %s ", mpzFixedMultiplier.get_str(16).c_str());
             printf("\nHashMultiplier : %u ", nTriedMultiplier);
+		    printf("\n");
          }
-         printf("\n");
 
          // submit this share
          multiplierSet.insert(block->mpzPrimeChainMultiplier);

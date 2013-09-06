@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <termios.h>            //termios, TCSANOW, ECHO, ICANON
 #include <unistd.h>     //STDIN_FILENO
 
@@ -17,7 +18,8 @@
 #endif
 
 primeStats_t primeStats = {0};
-commandlineInput_t commandlineInput ={0};
+commandlineInput_t commandlineInput = {0};
+commandlineInput_t OldCommandlineInput = {0};
 volatile int total_shares = 0;
 volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
@@ -27,6 +29,10 @@ unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 unsigned int nTarget;
 char* dt;
+uint64 lastShareSubmit = getTimeMilliseconds(); // Lets pretend something was submitted at start - to not reset too soon!
+bool bEnablenPrimorialMultiplierTuning;
+bool bOptimalL1SearchInProgress;
+BYTE nRoundSievePercentage;
 
 bool error(const char *format, ...)
 {
@@ -80,7 +86,8 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		unsigned int v;
 
 		if (!hexstr[1]) {
-			printf("hex2bin str truncated");
+			//printf("hex2bin str truncated");
+			std::cout << "hex2bin str truncated" << std::endl;
 			return ret;
 		}
 
@@ -89,7 +96,8 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		hex_byte[1] = hexstr[1];
 
 		if (sscanf(hex_byte, "%x", &v) != 1) {
-			printf( "hex2bin sscanf '%s' failed", hex_byte);
+			//printf( "hex2bin sscanf '%s' failed", hex_byte);
+			std::cout << "hex2bin sscanf '" << hex_byte << "' failed" << std::endl;
 			return ret;
 		}
 
@@ -202,33 +210,11 @@ void primecoinBlock_generateBlockHash(primecoinBlock_t* primecoinBlock, uint8 ha
 #define MINER_PROTOCOL_XPUSHTHROUGH	(3)
 
 
-jsonRequestTarget_t jsonRequestTarget; // rpc login data
-jsonRequestTarget_t statsRequestTarget = {0}; // rpc login data
+jsonRequestTarget_t jsonRequestTarget = {0}; // rpc login data
 jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
 bool useLocalPrimecoindForLongpoll;
 
 
-typedef struct  
-{
-	bool dataIsValid;
-	uint8 data[128];
-	uint32 dataHash; // used to detect work data changes
-	uint8 serverData[32]; // contains data from the server 
-}workDataEntry_t;
-
-typedef struct  
-{
-#ifdef _WIN32
-	CRITICAL_SECTION cs;
-#else
-  pthread_mutex_t cs;
-#endif
-	uint8 protocolMode;
-	// xpm
-	workDataEntry_t workEntry[128]; // work data for each thread (up to 128)
-	// x.pushthrough
-	xptClient_t* xptClient;
-}workData_t;
 
 workData_t workData;
 
@@ -241,54 +227,7 @@ workData_t workData;
  */
 bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock)
 {
-	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-	{
-		// prepare buffer to send
-		fStr_buffer4kb_t fStrBuffer_parameter;
-		fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
-		fStr_append(fStr_parameter, "[\""); // \"]
-		fStr_addHexString(fStr_parameter, data, 256);
-		fStr_appendFormatted(fStr_parameter, "\",\"");
-		fStr_addHexString(fStr_parameter, (uint8*)&primecoinBlock->serverData, 32);
-		fStr_append(fStr_parameter, "\"]");
-		// send request
-		sint32 rpcErrorCode = 0;
-		jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getwork", fStr_parameter, &rpcErrorCode);
-		if( jsonReturnValue == NULL )
-		{
-			printf("PushWorkResult failed :(\n");
-			return false;
-		}
-		else
-		{
-			// rpc call worked, sooooo.. is the server happy with the result?
-			jsonObject_t* jsonReturnValueBool = jsonObject_getParameter(jsonReturnValue, "result");
-			if( jsonObject_isTrue(jsonReturnValueBool) )
-			{
-				total_shares++;
-				valid_shares++;
-				time_t now = time(0);
-				dt = ctime(&now);
-				//printf("Valid share found!");
-				//printf("[ %d / %d ] %s",valid_shares, total_shares,dt);
-				jsonObject_freeObject(jsonReturnValue);
-				return true;
-			}
-			else
-			{
-				total_shares++;
-				// the server says no to this share :(
-				printf("Server rejected share (BlockHeight: %u/%u nBits: 0x%08uX)\n", primecoinBlock->serverData.blockHeight, jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex), primecoinBlock->serverData.client_shareBits);
-				jsonObject_freeObject(jsonReturnValue);
-				return false;
-			}
-		}
-		jsonObject_freeObject(jsonReturnValue);
-		return false;
-	}
-	else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
-	{
-		// printf("Queue share\n");
+	// printf("Queue share\n");
 		xptShareToSubmit_t* xptShareToSubmit = (xptShareToSubmit_t*)malloc(sizeof(xptShareToSubmit_t));
 		memset(xptShareToSubmit, 0x00, sizeof(xptShareToSubmit_t));
 		memcpy(xptShareToSubmit->merkleRoot, primecoinBlock->merkleRoot, 32);
@@ -307,15 +246,15 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
 		// todo: Set stuff like sieve size
 		if( workData.xptClient && !workData.xptClient->disconnected){
 			xptClient_foundShare(workData.xptClient, xptShareToSubmit);
+			lastShareSubmit = getTimeMilliseconds();
 			return true;
 		}
 		else
 		{
-			printf("Share submission failed. The client is not connected to the pool.\n");
+			//printf("Share submission failed. The client is not connected to the pool.\n");
+			std::cout << "Share submission failed. The client is not connected to the pool." << std::endl;
 			return false;
 		}
-	}
-	return false;
 }
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
@@ -376,7 +315,7 @@ static bool IsXptClientConnected()
 }
 #endif
 
-
+/*
 void jhMiner_queryWork_primecoin()
 {
 	sint32 rpcErrorCode = 0;
@@ -386,7 +325,8 @@ void jhMiner_queryWork_primecoin()
 	// printf("request time: %dms\n", time2);
 	if( jsonReturnValue == NULL )
 	{
-		printf("Getwork() failed with %serror code %d\n", (rpcErrorCode>1000)?"http ":"", rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode);
+		//printf("Getwork() failed with %serror code %d\n", (rpcErrorCode>1000)?"http ":"", rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode);
+		std::cout << "Getwork() failed with " << ((rpcErrorCode>1000)?"http ":"") << "error code " << (rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode) << std::endl;
 		workData.workEntry[0].dataIsValid = false;
 		return;
 	}
@@ -400,7 +340,8 @@ void jhMiner_queryWork_primecoin()
 		//jsonObject_t* jsonResult_algorithm = jsonObject_getParameter(jsonResult, "algorithm");
 		if( jsonResult_data == NULL )
 		{
-			printf("Error :(\n");
+			//printf("Error :(\n");
+			std::cout << "Error :(" << std::endl;
 			workData.workEntry[0].dataIsValid = false;
 			jsonObject_freeObject(jsonReturnValue);
 			return;
@@ -438,70 +379,15 @@ void jhMiner_queryWork_primecoin()
 		jsonObject_freeObject(jsonReturnValue);
 	}
 }
+*/
 
 /*
  * Returns the block height of the most recently received workload
  */
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 {
-	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-		return ((serverData_t*)workData.workEntry[0].serverData)->blockHeight;	
-	else
-		return ((serverData_t*)workData.workEntry[threadIndex].serverData)->blockHeight;
+	return ((serverData_t*)workData.workEntry[threadIndex].serverData)->blockHeight;
 }
-
-/*
- * Worker thread mainloop for getwork() mode
- */
-#ifdef _WIN32
-int jhMiner_workerThread_getwork(int threadIndex)
-{
-#else
-void* jhMiner_workerThread_getwork(void *arg)
-{
-  uint32_t threadIndex = static_cast<uint32_t>((uintptr_t)arg);
-#endif
-	while( true )
-	{
-		uint8 localBlockData[128];
-		// copy block data from global workData
-//		uint32 workDataHash = 0;  unused?
-		uint8 serverData[32];
-		while( workData.workEntry[0].dataIsValid == false ) Sleep(200);
-#ifdef _WIN32
-		EnterCriticalSection(&workData.cs);
-#else
-    pthread_mutex_lock(&workData.cs);
-#endif
-		memcpy(localBlockData, workData.workEntry[0].data, 128);
-		//seed = workData.seed;
-		memcpy(serverData, workData.workEntry[0].serverData, 32);
-#ifdef _WIN32
-		LeaveCriticalSection(&workData.cs);
-#else
-    pthread_mutex_unlock(&workData.cs);
-#endif
-		// swap endianess
-		for(uint32 i=0; i<128/4; i++)
-		{
-			*(uint32*)(localBlockData+i*4) = _swapEndianessU32(*(uint32*)(localBlockData+i*4));
-		}
-		// convert raw data into primecoin block
-		primecoinBlock_t primecoinBlock = {0};
-		memcpy(&primecoinBlock, localBlockData, 80);
-		// we abuse the timestamp field to generate an unique hash for each worker thread...
-		primecoinBlock.timestamp += threadIndex;
-		primecoinBlock.threadIndex = threadIndex;
-		primecoinBlock.xptMode = (workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH);
-		// ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
-		memcpy(&primecoinBlock.serverData, serverData, 32);
-		// start mining
-		BitcoinMiner(&primecoinBlock, threadIndex);
-		primecoinBlock.mpzPrimeChainMultiplier = 0;
-	}
-	return 0;
-}
-
 
 /*
  * Worker thread mainloop for xpt() mode
@@ -556,36 +442,104 @@ void *jhMiner_workerThread_xpt(void *arg)
 
 void jhMiner_printHelp()
 {
-	puts("Usage: jhPrimeminer.exe [options]");
-	puts("Options:");
-	puts("   -o, -O                        The miner will connect to this url");
-	puts("                                 You can specifiy an port after the url using -o url:port");
-	puts("   -u                            The username (workername) used for login");
-	puts("   -p                            The password used for login");
-	puts("   -t <num>                      The number of threads for mining (default 1)");
-	puts("                                     For most efficient mining, set to number of CPU cores");
-	puts("   -s <num>                      Set MaxSieveSize range from 200000 - 10000000");
-	puts("                                     Default is 1500000.");
-	puts("   -d <num>                      Set SievePercentage - range from 1 - 100");
-	puts("                                     Default is 15 and it's not recommended to use lower values than 8.");
-	puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
-	puts("   -r <num>                      Set RoundSievePercentage - range from 3 - 97");
-	puts("                                     The parameter determines how much time is spent running the sieve.");
-	puts("                                     By default 80% of time is spent in the sieve and 20% is spent on checking the candidates produced by the sieve");
-	puts("   -primes <num>                 Sets how many prime factors are used to filter the sieve");
-	puts("                                     Default is MaxSieveSize. Valid range: 300 - 200000000");
-
-	puts("Example usage:");
-	puts("   jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4");
-#ifdef _WIN32
-	puts("Press any key to continue...");
+	using namespace std;
+	cout << "Usage: jhPrimeminer.exe [options]" << endl;
+	cout << "Core Options:" << endl;
+	cout << "  -conf <path>                   The config file to use. (default = ./jhprimeminer.conf)" << endl;
+	cout << "                                 If writeable, and -key is provided, this may be updated remotely" << endl;
+	cout << "                                 If readable, config file will be read, and any commandline options AFTER -conf override the config file" << endl;
+	cout << "                                 If provided, this MUST be the first commandline option given" << endl;
+	cout << "  -key <string>                  API key to use when connecting to a central server for stats and remote config" << endl;
+	cout << "                                 Automatically sets central server url to http://xpm.tandyuk.com:80 if -cs is not provided" << endl;	
+	cout << "  -cs <url>                      URL of central server to use for JSON-RPC stats and remote config" << endl;
+	cout << "  -csenabled [true|false|1|0]    Whether to enable central server mode. This is automatically enabled if -key or -cs is provided" << endl;
+	cout << "                                 or is defined in the config file. (default = false)" << endl;
+	cout << "  -sslnoverify [true|false|1|0]  Disable strict checking of SSL certificates. (default = false)" << endl;
+	cout << "                                 Enable this option if your central server has a self signed SSL certificate" << endl;
+	cout << "Display Options" << endl;
+	cout << "  -quiet                         Enable Quiet mode. Client will only print 1 line per share found" << endl;
+	cout << "  -silent                        Enable Silent mode. No output to console." << endl;
+	cout << "                                 In addition if central server is disabled, silent mode will disable tracking of most stats." << endl;
+	cout << "Pool Options:" << endl;
+	cout << "  -o, -O <url>                   The miner will connect to this url" << endl;
+	cout << "                                 You can specifiy an port after the url using -o url:port" << endl;
+	cout << "  -u <string>                    The username (workername) used for login" << endl;
+	cout << "  -p <string>                    The password used for login" << endl;
+	cout << "Performance Options:" << endl;
+	cout << "  -t <num>                       The number of threads for mining (default = detected cpu cores)" << endl;
+	cout << "                                 For most efficient mining, set to number of CPU cores" << endl;
+	cout << "  -s <num>                       Set MaxSieveSize range from 200000 - 10000000" << endl;
+	cout << "                                 Default is 1500000." << endl;
+	cout << "  -d <num>                       Set SievePercentage - range from 1 - 100" << endl;
+	cout << "                                 Default is 15 and it's not recommended to use lower values than 8." << endl;
+	cout << "                                 It limits how many base primes are used to filter out candidate multipliers in the sieve." << endl;
+	cout << "  -r <num>                       Set RoundSievePercentage - range from 3 - 97" << endl;
+	cout << "                                 The parameter determines how much time is spent running the sieve." << endl;
+	cout << "                                 By default 80% of time is spent in the sieve and 20% is spent on checking the candidates produced by the sieve" << endl;
+	cout << "  -primes <num>                  Sets how many prime factors are used to filter the sieve" << endl;
+	cout << "                                 Default is MaxSieveSize. Valid range: 300 - 200000000" << endl;
+	cout << "  -tune [true|false|1|0]         Enable Auto Tuning" << endl;
+	cout << "Example usage:" << endl;
+#ifndef _WIN32
+	cout << "  jhprimeminer -o http://poolurl.com:10034 -u workername -p workerpass" << endl;
+	cout << "  jhprimeminer -key abcd1234 -cs https://serverurl:8080 -sslnoverify true" << endl;
+	cout << "  jhprimeminer -conf /path/to/config.file -quiet" << endl;
+	cout << "  jhprimeminer        (will read config from ./jhprimeminer.conf)" << endl;
+#else
+	cout << "  jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4" << endl;
+	cout << "  jhprimeminer.exe -key abcd1234 -cs https://serverurl:8080 -sslnoverify true" << endl;
+	cout << "  jhprimeminer.exe -conf /path/to/config.file -quiet" << endl;
+	cout << "  jhprimeminer.exe        (will read config from ./jhprimeminer.conf)" << endl;
+puts("Press any key to continue...");
 	getchar();
 #endif
 }
 
 void jhMiner_parseCommandline(int argc, char **argv)
 {
+	using namespace std;
 	sint32 cIdx = 1;
+	bool defaultconfig = true;
+	while ( cIdx < std::min(argc,2) ){
+		char* argument = argv[cIdx];
+		cIdx++;
+		if( memcmp(argument, "-conf", 6)==0){
+			if( cIdx >= argc )
+			{
+				cout << "Missing filename after -conf option" << endl;
+				exit(0);
+			}
+			commandlineInput.configfile = fStrDup(argv[cIdx], 64);
+			cIdx++;
+			defaultconfig = false;
+		}
+	}
+
+
+	
+		//attempt to load from config file
+		std::ifstream configfile;
+		configfile.open(commandlineInput.configfile);
+		//test config file for readability	
+		if(configfile.is_open()){
+			//load config from file	
+			std::string config(std::istreambuf_iterator<char>(configfile.rdbuf()), std::istreambuf_iterator<char>());
+			if(!loadConfigJSON(config)){
+				std::cout << "Failed to parse config file: " << commandlineInput.configfile << std::endl;
+				exit(0);
+			}
+		}else{
+			if(!defaultconfig){
+				cout << "Failed to read config file: " << commandlineInput.configfile << endl;
+				exit(0);
+			}
+		}
+
+
+	
+
+	//parse rest if the commandline options
+	cIdx = 1;
 	while( cIdx < argc )
 	{
 		char* argument = argv[cIdx];
@@ -595,18 +549,27 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -o
 			if( cIdx >= argc )
 			{
-				printf("Missing URL after -o option\n");
+				cout << "Missing URL after -o option" << endl;
 				exit(0);
 			}
 			if( strstr(argv[cIdx], "http://") )
 				commandlineInput.host = fStrDup(strstr(argv[cIdx], "http://")+7);
 			else
 				commandlineInput.host = fStrDup(argv[cIdx]);
-			char* portStr = strstr(commandlineInput.host, ":");
+			const char* portStr = strstr(commandlineInput.host, ":");
 			if( portStr )
 			{
-				*portStr = '\0';
-				commandlineInput.port = atoi(portStr+1);
+		//		*portStr = '\0';
+		//		commandlineInput.port = atoi(portStr+1);
+				commandlineInput.port = atoi(portStr);
+			}
+			cIdx++;
+		}
+		else if( memcmp(argument, "-conf", 6)==0){
+			//already loaded conf
+			if(cIdx > 2){
+				cout << "-conf parameter MUST be the first option." << endl;
+				exit(0);
 			}
 			cIdx++;
 		}
@@ -615,7 +578,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -u
 			if( cIdx >= argc )
 			{
-				printf("Missing username/workername after -u option\n");
+				cout << "Missing username/workername after -u option" << endl;
 				exit(0);
 			}
 			commandlineInput.workername = fStrDup(argv[cIdx], 64);
@@ -626,7 +589,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -p
 			if( cIdx >= argc )
 			{
-				printf("Missing password after -p option\n");
+				cout << "Missing password after -p option" << endl;
 				exit(0);
 			}
 			commandlineInput.workerpass = fStrDup(argv[cIdx], 64);
@@ -637,13 +600,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -t
 			if( cIdx >= argc )
 			{
-				printf("Missing thread number after -t option\n");
+				cout << "Missing thread number after -t option" << endl;
 				exit(0);
 			}
 			commandlineInput.numThreads = atoi(argv[cIdx]);
 			if( commandlineInput.numThreads < 1 || commandlineInput.numThreads > 128 )
 			{
-				printf("-t parameter out of range");
+				cout << "-t parameter out of range" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -653,13 +616,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -s
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -s option\n");
+				cout << "Missing number after -s option" << endl;
 				exit(0);
 			}
 			commandlineInput.sieveSize = atoi(argv[cIdx]);
 			if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 40000000 )
 			{
-				printf("-s parameter out of range, must be between 200000 - 10000000");
+				cout << "-s parameter out of range, must be between 200000 - 10000000" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -669,13 +632,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -s
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -d option\n");
+				cout << "Missing number after -d option" << endl;
 				exit(0);
 			}
 			commandlineInput.sievePercentage = atoi(argv[cIdx]);
 			if( commandlineInput.sievePercentage < 1 || commandlineInput.sievePercentage > 100 )
 			{
-				printf("-d parameter out of range, must be between 1 - 100");
+				cout << "-d parameter out of range, must be between 1 - 100" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -685,13 +648,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -s
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -r option\n");
+				cout << "Missing number after -r option" << endl;
 				exit(0);
 			}
 			commandlineInput.roundSievePercentage = atoi(argv[cIdx]);
 			if( commandlineInput.roundSievePercentage < 3 || commandlineInput.roundSievePercentage > 97 )
 			{
-				printf("-r parameter out of range, must be between 3 - 97");
+				cout << "-r parameter out of range, must be between 3 - 97" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -701,13 +664,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -primes
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -primes option\n");
+				cout << "Missing number after -primes option" << endl;
 				exit(0);
 			}
 			commandlineInput.sievePrimeLimit = atoi(argv[cIdx]);
 			if( commandlineInput.sievePrimeLimit < 300 || commandlineInput.sievePrimeLimit > 200000000 )
 			{
-				printf("-primes parameter out of range, must be between 300 - 200000000");
+				cout << "-primes parameter out of range, must be between 300 - 200000000" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -717,13 +680,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -c
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -c option\n");
+				cout << "Missing number after -c option" << endl;
 				exit(0);
 			}
 			commandlineInput.L1CacheElements = atoi(argv[cIdx]);
 			if( commandlineInput.L1CacheElements < 300 || commandlineInput.L1CacheElements > 200000000  || commandlineInput.L1CacheElements % 32 != 0) 
 			{
-				printf("-c parameter out of range, must be between 64000 - 2000000 and multiply of 32");
+				cout << "-c parameter out of range, must be between 64000 - 2000000 and multiply of 32" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -733,13 +696,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -primes
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -m option\n");
+				cout << "Missing number after -m option" << endl;
 				exit(0);
 			}
 			commandlineInput.primorialMultiplier = atoi(argv[cIdx]);
 			if( commandlineInput.primorialMultiplier < 5 || commandlineInput.primorialMultiplier > 1009) 
 			{
-				printf("-m parameter out of range, must be between 5 - 1009 and should be a prime number");
+				cout << "-m parameter out of range, must be between 5 - 1009 and should be a prime number" << endl;
 				exit(0);
 			}
 			cIdx++;
@@ -749,7 +712,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
          // -tune
 			if( cIdx >= argc )
 			{
-            printf("Missing flag after -tune option\n");
+            cout << "Missing flag after -tune option" << endl;
 				exit(0);
 			}
 			if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
@@ -762,13 +725,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          // -target
          if( cIdx >= argc )
          {
-            printf("Missing number after -target option\n");
+            cout << "Missing number after -target option" << endl;
             exit(0);
          }
          commandlineInput.targetOverride = atoi(argv[cIdx]);
-         if( commandlineInput.targetOverride < 0 || commandlineInput.targetOverride > 100 )
+         if( commandlineInput.targetOverride < 1 || commandlineInput.targetOverride > 100 )
          {
-            printf("-target parameter out of range, must be between 0 - 100");
+            cout << "-target parameter out of range, must be between 1 - 100" << endl;
             exit(0);
          }
          cIdx++;
@@ -782,9 +745,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
             exit(0);
          }
          commandlineInput.targetBTOverride = atoi(argv[cIdx]);
-         if( commandlineInput.targetBTOverride < 0 || commandlineInput.targetBTOverride > 100 )
+         if( commandlineInput.targetBTOverride < 1 || commandlineInput.targetBTOverride > 100 )
          {
-            printf("-bttarget parameter out of range, must be between 0 - 100");
+            cout << "-bttarget parameter out of range, must be between 1 - 100" << endl;
             exit(0);
          }
          cIdx++;
@@ -794,13 +757,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          // -primorial
          if( cIdx >= argc )
          {
-            printf("Missing number after -primorial option\n");
+            cout << "Missing number after -primorial option" << endl;
             exit(0);
          }
          commandlineInput.initialPrimorial = atoi(argv[cIdx]);
          if( commandlineInput.initialPrimorial < 11 || commandlineInput.initialPrimorial > 1000 )
          {
-            printf("-primorial parameter out of range, must be between 11 - 1000");
+            cout << "-primorial parameter out of range, must be between 11 - 1000" << endl;
             exit(0);
          }
          cIdx++;
@@ -810,7 +773,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -cs
 			if( cIdx >= argc )
 			{
-				printf("Missing central server address after -cs option\n");
+				cout << "Missing central server address after -cs option" << endl;
 				exit(0);
 			}
 
@@ -819,11 +782,12 @@ void jhMiner_parseCommandline(int argc, char **argv)
 				commandlineInput.centralServer = fStrDup(strstr(argv[cIdx], "http://")+7);
 			else
 				commandlineInput.centralServer = fStrDup(argv[cIdx]);
-			char* portStr = strstr(commandlineInput.centralServer, ":");
+			const char* portStr = strstr(commandlineInput.centralServer, ":");
 			if( portStr )
 			{
-				*portStr = '\0';
-				commandlineInput.centralServerPort = atoi(portStr+1);
+			//	*portStr = '\0';
+	//			commandlineInput.centralServerPort = atoi(portStr+1);
+				commandlineInput.centralServerPort = atoi(portStr);
 			}
 			commandlineInput.csEnabled = true;
 			cIdx++;
@@ -833,7 +797,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			// -key
 			if( cIdx >= argc )
 			{
-				printf("Missing API key after -key option\n");
+				cout << "Missing API key after -key option" << endl;
 				exit(0);
 			}
 			commandlineInput.csApiKey = fStrDup(argv[cIdx], 128);
@@ -845,29 +809,99 @@ void jhMiner_parseCommandline(int argc, char **argv)
          // -debug
          if( cIdx >= argc )
          {
-            printf("Missing flag after -debug option\n");
+            cout << "Missing flag after -debug option" << endl;
             exit(0);
          }
          if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
             commandlineInput.printDebug = true;
          cIdx++;
       }
-else if( memcmp(argument, "-se", 4)==0 )
+	  else if( memcmp(argument, "-sslnoverify", 13)==0 )
+      {
+		bool arg = false;
+        // -sslnoverify doesnt need an argument.
+        if( !(cIdx >= argc) && !memcmp(argument, "-", 1)){
+			arg = true;
+		}
+		if(arg){
+			if(memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0){
+				 commandlineInput.weakSSL = true;
+				 cIdx++;
+			 }
+			else if(memcmp(argument, "false", 6) == 0 || memcmp(argument, "0", 2) == 0){
+				commandlineInput.weakSSL = false;
+				cIdx++;
+			}else{
+				cout << "Usage: -sslnoverify [true|false|1|0]" << endl;
+				exit(0);
+			}
+		}else{
+			commandlineInput.weakSSL = true;
+		}
+      }
+		else if( memcmp(argument, "-se", 4)==0 )
 		{
 			// -target
 			if( cIdx >= argc )
 			{
-				printf("Missing number after -se option\n");
+				cout << "Missing number after -se option" << endl;
 				exit(0);
 			}
 			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
 			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 15 )
 			{
-				printf("-se parameter out of range, must be between 0 - 15\n");
+				cout << "-se parameter out of range, must be between 0 - 15" << endl;
 				exit(0);
 			}
 			cIdx++;
 		}
+	  	  else if( memcmp(argument, "-quiet", 7)==0 )
+      {
+		bool arg = false;
+        // -sslnoverify doesnt need an argument.
+        if( !(cIdx >= argc) && !memcmp(argument, "-", 1)){
+			arg = true;
+		}
+		if(arg){
+			if(memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0){
+				 commandlineInput.quiet = true;
+				 cIdx++;
+			 }
+			else if(memcmp(argument, "false", 6) == 0 || memcmp(argument, "0", 2) == 0){
+				commandlineInput.quiet = false;
+				cIdx++;
+			}else{
+				cout << "Usage: -sslnoverify [true|false|1|0]" << endl;
+				exit(0);
+			}
+		}else{
+			commandlineInput.quiet = true;
+		}
+      }
+	  else if( memcmp(argument, "-silent", 8)==0 )
+      {
+		bool arg = false;
+        // -sslnoverify doesnt need an argument.
+        if( !(cIdx >= argc) && !memcmp(argument, "-", 1)){
+			arg = true;
+		}
+		if(arg){
+			if(memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0){
+				 commandlineInput.silent = true;
+				 cIdx++;
+			 }
+			else if(memcmp(argument, "false", 6) == 0 || memcmp(argument, "0", 2) == 0){
+				commandlineInput.silent = false;
+				cIdx++;
+			}else{
+				cout << "Usage: -sslnoverify [true|false|1|0]" << endl;
+				exit(0);
+			}
+		}else{
+			commandlineInput.silent = true;
+		}
+      }
+
 		else if( memcmp(argument, "-help", 6)==0 || memcmp(argument, "--help", 7)==0 )
 		{
 			jhMiner_printHelp();
@@ -875,7 +909,12 @@ else if( memcmp(argument, "-se", 4)==0 )
 		}
 		else
 		{
-			printf("'%s' is an unknown option.\nType jhPrimeminer.exe --help for more info\n", argument); 
+			cout << "'" << argument << "' is an unknown option." << endl;
+			#ifdef _WIN32
+				cout << "Type jhPrimeminer.exe -help for more info" << endl;
+			#else
+				cout << "Type jhPrimeminer -help for more info" << endl; 
+			#endif
 			exit(-1);
 		}
 	}
@@ -888,10 +927,7 @@ else if( memcmp(argument, "-se", 4)==0 )
 
 
 
-bool fIncrementPrimorial = true;
 
-BYTE nRoundSievePercentage;
-bool bOptimalL1SearchInProgress = false;
 
 #ifdef _WIN32
 static void CacheAutoTuningWorkerThread(bool bEnabled)
@@ -960,25 +996,30 @@ void *CacheAutoTuningWorkerThread(void * arg)
 					nOptimalSize = mL1StatIter->first;
 				}
 			}
-			printf("The optimal L1CacheElement size is: %u\n", nOptimalSize);
+			if(!commandlineInput.silent && !commandlineInput.quiet){
+				printf("The optimal L1CacheElement size is: %u\n", nOptimalSize);
+			}
 			primeStats.nL1CacheElements = nOptimalSize;
 			nL1CacheElements = nOptimalSize;
 			bOptimalL1SearchInProgress = false;
 			break;
 		}			
-		printf("Auto Tuning in progress: %u %%\n", ((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart));
+		if(!commandlineInput.silent && !commandlineInput.quiet){
+			std::cout << "Auto Tuning in progress: " << (((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart)) << "%" << std::endl;
 		}
+	}
 				
 		float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
-		printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
+		if(!commandlineInput.silent && !commandlineInput.quiet){
+			printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
 			primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
 			primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
+		}
 		if (bEnabled)
 			nCounter ++;
 	}
 }
 
-bool bEnablenPrimorialMultiplierTuning;
 
 #ifdef _WIN32
 int RoundSieveAutoTuningWorkerThread(void)
@@ -991,7 +1032,7 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 
 		while (true && !xptClient_isDisconnected(workData.xptClient, NULL))
 		{
-			if (!bOptimalL1SearchInProgress || bEnablenPrimorialMultiplierTuning){
+			if (!bOptimalL1SearchInProgress && bEnablenPrimorialMultiplierTuning){
 			primeStats.nWaveTime = 0;
 			primeStats.nWaveRound = 0;
 			primeStats.nTestTime = 0;
@@ -1017,9 +1058,13 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 			{
       // explicit cast to ref removes g++ warning but might be dumb, dunno
 				if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
-					error("PrimecoinMiner() : primorial increment overflow - resetting");
-				primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
-				printf( "\nSieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
+					if(!commandlineInput.silent){
+						error("PrimecoinMiner() : primorial increment overflow - resetting");
+					}
+					primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
+				if(!commandlineInput.silent && !commandlineInput.quiet){
+					std::cout << "\nSieve/Test ratio:" << ratio << " / " << (100.0 - ratio) << "%  - New PrimorialMultiplier: " << primeStats.nPrimorialMultiplier << std::endl;
+				}
 			}
 			else
 			{
@@ -1030,11 +1075,15 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 					{
 						if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier)){
 							//@todo: fix (bandaid) 0/100% bug?
-							error("PrimecoinMiner() : primorial decrement overflow - resetting");
+							if(!commandlineInput.silent){
+								error("PrimecoinMiner() : primorial decrement overflow - resetting");
+							}
 							primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
 						}
 					}
-					printf( "\nSieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
+					if(!commandlineInput.silent && !commandlineInput.quiet){
+						std::cout << "\nSieve/Test ratio: " << ratio << " / " << (100 - ratio) << " %  - New PrimorialMultiplier: " << primeStats.nPrimorialMultiplier << std::endl;
+					}
 				}
 			}
 		}
@@ -1044,6 +1093,7 @@ void *RoundSieveAutoTuningWorkerThread(void *)
 
 void PrintCurrentSettings()
 {
+	using namespace std;
 	unsigned long uptime = (getTimeMilliseconds() - primeStats.startTime);
 
 	unsigned int days = uptime / (24 * 60 * 60 * 1000);
@@ -1054,23 +1104,23 @@ void PrintCurrentSettings()
     uptime %= (60 * 1000);
     unsigned int seconds = uptime / (1000);
 
-	printf("\n--------------------------------------------------------------------------------\n");	
-	printf("Worker name (-u): %s\n", commandlineInput.workername);
+	cout << endl << "--------------------------------------------------------------------------------"<< endl;
+	cout << "Worker name (-u): " << commandlineInput.workername << endl;
 if(commandlineInput.csEnabled)
-	printf("Central Server (-cs): %s\n", commandlineInput.centralServer);
-	printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
-	printf("Sieve Size (-s): %u\n", nMaxSieveSize);
-	printf("Sieve Percentage (-d): %u\n", nSievePercentage);
-	printf("Round Sieve Percentage (-r): %u\n", nRoundSievePercentage);
-	printf("Prime Limit (-primes): %u\n", commandlineInput.sievePrimeLimit);
-	printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
-	printf("L1CacheElements (-c): %u\n", primeStats.nL1CacheElements);	
-	printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
-	printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
-	printf("Sieve Extensions (-se): %u\n", nSieveExtensions);	
-	printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
-	printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
-	printf("--------------------------------------------------------------------------------\n");
+	cout << "Central Server (-cs): " << commandlineInput.centralServer << endl;
+	cout << "Number of mining threads (-t): " << commandlineInput.numThreads << endl;
+	cout << "Sieve Size (-s): " << nMaxSieveSize << endl;
+	cout << "Sieve Percentage (-d): " << nSievePercentage << endl;
+	cout << "Round Sieve Percentage (-r): " << nRoundSievePercentage << endl;
+	cout << "Prime Limit (-primes): " << commandlineInput.sievePrimeLimit << endl;
+	cout << "Primorial Multiplier (-m): " << primeStats.nPrimorialMultiplier << endl;
+	cout << "L1CacheElements (-c): " << primeStats.nL1CacheElements << endl;
+	cout << "Chain Length Target (-target): " << nOverrideTargetValue << endl;
+	cout << "BiTwin Length Target (-bttarget): " << nOverrideBTTargetValue << endl;
+	cout << "Sieve Extensions (-se): " << nSieveExtensions << endl;
+	cout << "Total Runtime: " << days << " Days, " << hours << " Hours, " << minutes << " minutes, " << seconds << " seconds" << endl;
+	cout << "Total Share Value submitted to the Pool: " << primeStats.fTotalSubmittedShareValue << endl;	
+	cout << "--------------------------------------------------------------------------------" << endl;
 }
 
 
@@ -1111,21 +1161,21 @@ static struct termios oldt, newt;
 	return 0;
 #endif
 			break;
-		case '[':
+		case 'h': case 'H':
 			// explicit cast to ref removes g++ warning but might be dumb, dunno
 			if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier))
 				error("PrimecoinMiner() : primorial decrement overflow");	
-			printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
+			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << std::endl;
 			break;
-		case ']':
+		case 'y': case 'Y':
 			// explicit cast to ref removes g++ warning but might be dumb, dunno
 			if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
 				error("PrimecoinMiner() : primorial increment overflow");
-			printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
+			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << std::endl;
 			break;
 		case 'p': case 'P':
 			bEnablenPrimorialMultiplierTuning = !bEnablenPrimorialMultiplierTuning;
-			printf("Primorial Multiplier Auto Tuning was %s.\n", bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled");
+			std::cout << "Primorial Multiplier Auto Tuning was " << (bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled") << std::endl;
 			break;
 		case 'c': case 'C':
 			if (!bOptimalL1SearchInProgress)
@@ -1138,52 +1188,42 @@ static struct termios oldt, newt;
 				const bool enabled = true;
 				pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&enabled);
 #endif
-				puts("Auto tunning for L1CacheElements size was started");
+				std::cout << "Auto tunning for L1CacheElements size was started" << std::endl;
 			}
 			break;
 		case 's': case 'S':			
 			PrintCurrentSettings();
 			break;
-		case '+': case '=':
+		case 'u': case 'U':
 			if (!bOptimalL1SearchInProgress && nMaxSieveSize < 10000000)
 				nMaxSieveSize += 100000;
-			printf("Sieve size: %u\n", nMaxSieveSize);
+			std::cout << "Sieve size: " << nMaxSieveSize << std::endl;
 			break;
-		case '-':
+		case 'j': case 'J':
 			if (!bOptimalL1SearchInProgress && nMaxSieveSize > 100000)
 				nMaxSieveSize -= 100000;
-			printf("Sieve size: %u\n", nMaxSieveSize);
+			std::cout << "Sieve size: " << nMaxSieveSize << std::endl;
 			break;
-		case 0: case 224:
-			{
-				input = getchar();	
-				switch (input)
-				{
-				case 72: // key up
-					if (!bOptimalL1SearchInProgress && nSievePercentage < 100)
-						nSievePercentage ++;
-					printf("Sieve Percentage: %u%%\n", nSievePercentage);
-					break;
-
-				case 80: // key down
-					if (!bOptimalL1SearchInProgress && nSievePercentage > 3)
-						nSievePercentage --;
-					printf("Sieve Percentage: %u%%\n", nSievePercentage);
-					break;
-
-				case 77:    // key right
-					if( nRoundSievePercentage < 98)
-						nRoundSievePercentage++;
-					printf("Round Sieve Percentage: %u%%\n", nRoundSievePercentage);
-					break;
-				case 75:    // key left
-					if( nRoundSievePercentage > 2)
-						nRoundSievePercentage--;
-					printf("Round Sieve Percentage: %u%%\n", nRoundSievePercentage);
-					break;
-				}
-			}
-
+		case 'r': case 'R':
+			if (!bOptimalL1SearchInProgress && nSievePercentage < 100)
+				nSievePercentage ++;
+			std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
+			break;
+		case 'f': case 'F':
+			if (!bOptimalL1SearchInProgress && nSievePercentage > 3)
+				nSievePercentage --;
+			std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
+			break;
+		case 't': case 'T':
+			if( nRoundSievePercentage < 98)
+				nRoundSievePercentage++;
+			std::cout << "Round Sieve Percentage: " << nRoundSievePercentage << "%" << std::endl;
+			break;
+		case 'g': case 'G':
+			if( nRoundSievePercentage > 2)
+				nRoundSievePercentage--;
+			std::cout << "Round Sieve Percentage: " << nRoundSievePercentage << "%" << std::endl;
+			break;
 		}
 	}
 #ifdef _WIN32
@@ -1194,23 +1234,33 @@ static struct termios oldt, newt;
     return 0;
 #endif
 }
+
+
 #ifdef _WIN32
 typedef std::pair <DWORD, HANDLE> thMapKeyVal;
-DWORD * threadHearthBeat;
+uint64 * threadHearthBeat;
 
 static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
+#else
+static void *watchdog_thread(void *)
+#endif
 {
-	DWORD maxIdelTime = 10 * 1000;
-   DWORD maxTimeBetweenShareSubmit = 30 * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
-	std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
-		while(true)
+   uint32 maxTimeBetweenShareSubmit = 30 * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
+#ifdef _WIN32
+   	uint32 maxIdelTime = 10 * 1000;
+std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
+#endif
+   while(true)
 		{
 	  if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds())
 	  {
 		// Something must be wrong, no accepted shares for a long time
-		printf ("Error - Watchdog - No accepted shares for too long!");
+		if(!commandlineInput.silent){
+			std::cout << "Error - Watchdog - No accepted shares for too long!" << std::endl;
+		}
 		exit (EXIT_FAILURE);		// Quit the application - It WOULD be better to reinitialize the entire application
 	  }
+#ifdef _WIN32
 
 			if (!IsXptClientConnected())
 				continue;
@@ -1222,7 +1272,9 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 				if (currentTick - heartBeatTick > maxIdelTime)
 				{
 					//restart the thread
-					printf("Restarting thread %d\n", i);
+					if(!commandlineInput.silent){
+						std::cout << "Restarting thread " << i << std::endl;
+					}
 					//__try
 					//{
 
@@ -1250,10 +1302,10 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 					}*/
 				}
 			}
-			Sleep( 1*1000);
+#endif
+			Sleep( 10*1000);
 		}
 }
-#endif
 
 /*
  * Mainloop when using xpt mode
@@ -1270,7 +1322,7 @@ int jhMiner_main_xptMode()
 
 
    std::map<DWORD, HANDLE> threadMap;
-   threadHearthBeat = (DWORD *)malloc( commandlineInput.numThreads * sizeof(DWORD));
+   threadHearthBeat = (uint64 *)malloc( commandlineInput.numThreads * sizeof(uint64));
 	// start threads
 	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
 	{
@@ -1282,7 +1334,7 @@ int jhMiner_main_xptMode()
  CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watchdog_thread, (LPVOID)&threadMap, 0, 0);
 
 #else
- uint32_t totalThreads = commandlineInput.numThreads + 2;
+ uint32_t totalThreads = commandlineInput.numThreads + 3;
   pthread_t threads[totalThreads];
   // start the Auto Tuning thread
   if( commandlineInput.enableCacheTunning ){
@@ -1290,6 +1342,7 @@ int jhMiner_main_xptMode()
   }
   pthread_create(&threads[commandlineInput.numThreads+2], NULL, RoundSieveAutoTuningWorkerThread, NULL);
   pthread_create(&threads[commandlineInput.numThreads], NULL, input_thread, NULL);
+  pthread_create(&threads[commandlineInput.numThreads+3], NULL, watchdog_thread, NULL);
   pthread_attr_t threadAttr;
   pthread_attr_init(&threadAttr);
   // Set the stack size of the thread
@@ -1298,7 +1351,7 @@ int jhMiner_main_xptMode()
   pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_DETACHED);
   
   // start threads
-	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
+	for(uint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
   {
 	pthread_create(&threads[threadIdx], 
                    &threadAttr, 
@@ -1310,7 +1363,7 @@ int jhMiner_main_xptMode()
 	// main thread, don't query work, just wait and process
 	sint32 loopCounter = 0;
 	uint32 xptWorkIdentifier = 0xFFFFFFFF;
-	uint64 time_multiAdjust = getTimeMilliseconds();
+//	uint64 time_multiAdjust = getTimeMilliseconds();
    //unsigned long lastFiveChainCount = 0;
    //unsigned long lastFourChainCount = 0;
 	while( true )
@@ -1345,23 +1398,15 @@ int jhMiner_main_xptMode()
             //float fourSharePerPeriod = ((double)(primeStats.chainCounter[0][4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
             //lastFiveChainCount = primeStats.chainCounter[0][5];
             //lastFourChainCount = primeStats.chainCounter[0][4];
-            printf("\nVal/h: %8f - PPS: %d - SPS: %.03f - ACC: %d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
-            printf(" Chain/Hr: ");
-
-            for(int i=6; i<=10; i++)
-				{
-               printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
+     		if(!commandlineInput.silent && !commandlineInput.quiet){
+				std::cout << "Val/h: " << shareValuePerHour << " - PPS: " << (sint32)primesPerSecond << " - SPS: " << sievesPerSecond << " - ACC: " << (sint32)avgCandidatesPerRound << std::endl;
+				std::cout << " Chain/Hr:  ";
+				for(int i=6; i<=std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++){
+	               std::cout << i << ": " <<  std::setprecision(2) << (((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0) << " ";
 				}
-            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 11)
-            {
-            //   printf("\n           ");
-               for(int i=11; i<=15; i++)
-               {
-                  printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
-               }
-            }
-            printf("\n\n");
+				std::cout << std::endl;
 				//printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
+			}
 			}
 		}
 		// wait and check some stats
@@ -1387,9 +1432,13 @@ int jhMiner_main_xptMode()
 				// disconnected, mark all data entries as invalid
 				for(uint32 i=0; i<128; i++)
 					workData.workEntry[i].dataIsValid = false;
-				printf("xpt: Disconnected, auto reconnect in 30 seconds\n");
+     		if(!commandlineInput.silent && !commandlineInput.quiet){
+				std::cout << "xpt: Disconnected, auto reconnect in 30 seconds"<<std::endl;
+			}
 				if( workData.xptClient && disconnectReason )
-					printf("xpt: Disconnect reason: %s\n", disconnectReason);
+			     	if(!commandlineInput.silent && !commandlineInput.quiet){
+						std::cout << "xpt: Disconnect reason: " << disconnectReason << std::endl;
+					}
 				Sleep(30*1000);
 				if( workData.xptClient )
 					xptClient_free(workData.xptClient);
@@ -1433,28 +1482,27 @@ int jhMiner_main_xptMode()
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
 					double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
 					double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
-               printf("\n--------------------------------------------------------------------------------\n");
-               printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-               printf("Total/Valid shares: [ %d / %d ]  -  Max diff: %.06f\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
+					if(!commandlineInput.silent && commandlineInput.quiet){
+						std::cout << "New Block: " << workData.xptClient->blockWorkInfo.height << " - Diff: " << blockDiff << " / " << poolDiff << std::endl;
+					}
+					
+					if(!commandlineInput.silent && !commandlineInput.quiet){
+						std::cout << std::endl << "--------------------------------------------------------------------------------" << std::endl;
+						std::cout << "New Block: " << workData.xptClient->blockWorkInfo.height << " - Diff: " << blockDiff << " / " << poolDiff << std::endl;
+						std::cout << "Total/Valid shares: [ " << total_shares << " / " << valid_shares << " ]  -  Max diff: " << primeStats.bestPrimeChainDifficultySinceLaunch << std::endl;
                statsPassedTime = (double)(getTimeMilliseconds() - primeStats.blockStartTime);
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
                for (int i = 6; i <= std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
                {
                   double sharePerHour = ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0;
-                  printf("%2dch/h: %8.02f - %u [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
-                     i, sharePerHour, 
-                     primeStats.chainCounter[0][i],
-                     primeStats.chainCounter[1][i],
-                     primeStats.chainCounter[2][i],
-                     primeStats.chainCounter[3][i]//, 
-                     //(double)primeStats.chainCounter[0][i] * GetValueOfShareMajor(i)
-                     );
+                  std::cout << i << "ch/h: " << sharePerHour << " - " << primeStats.chainCounter[0][i] << " [ " << primeStats.chainCounter[1][i] << " / " << primeStats.chainCounter[2][i] << " / " << primeStats.chainCounter[3][i] << " ]" << std::endl;
                }
-               printf("Share Value submitted - Last Block/Total: %0.6f / %0.6f\n", primeStats.fBlockShareValue, primeStats.fTotalSubmittedShareValue);
-               printf("Current Primorial Value: %u\n", primeStats.nPrimorialMultiplier);
-               printf("--------------------------------------------------------------------------------\n");
+               std::cout << "Share Value submitted - Last Block/Total: " << primeStats.fBlockShareValue << " / " << primeStats.fTotalSubmittedShareValue << std::endl;
+               std::cout << "Current Primorial Value: " << primeStats.nPrimorialMultiplier << std::endl;
+               std::cout << "--------------------------------------------------------------------------------" << std::endl;
+			}
 			if(commandlineInput.csEnabled)
-			   NEWnotifyStats();
+			   csNotifyStats();
 					primeStats.fBlockShareValue = 0;
 						multiplierSet.clear();
 				}
@@ -1470,75 +1518,83 @@ int jhMiner_main_xptMode()
 int main(int argc, char **argv)
 {
 	// setup some default values
+	bOptimalL1SearchInProgress = false;
 	commandlineInput.port = 10034;
-	commandlineInput.numThreads = getNumThreads();
-	commandlineInput.numThreads = std::max(commandlineInput.numThreads, 1);
+	commandlineInput.numThreads = std::max(getNumThreads(), 1);
 	commandlineInput.sieveSize = 1000000; // default maxSieveSize
 	commandlineInput.sievePercentage = 10; // default 
 	commandlineInput.roundSievePercentage = 70; // default 
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
-commandlineInput.targetOverride = 0;
-   commandlineInput.targetBTOverride = 0;
-   commandlineInput.initialPrimorial = 61;
-   commandlineInput.printDebug = 0;
-   commandlineInput.centralServer = "http://xpm.tandyuk.com";
-   commandlineInput.centralServerPort = 80;
-   commandlineInput.csEnabled = false;
+	commandlineInput.targetOverride = 0;
+	commandlineInput.targetBTOverride = 0;
+	commandlineInput.initialPrimorial = 61;
+	commandlineInput.printDebug = 0;
+	commandlineInput.centralServer = "xpm.tandyuk.com";
+	commandlineInput.centralServerPort = 80;
+	commandlineInput.csEnabled = false;
 	commandlineInput.sieveExtensions = 7;
-
-	
+	commandlineInput.weakSSL = false;
+	commandlineInput.csUUID = NULL;
 	commandlineInput.sievePrimeLimit = 0;
-	// parse command lines
+	commandlineInput.configfile = "jhprimeminer.conf";
+	commandlineInput.quiet = false;
+	commandlineInput.silent = false;
+
+	// parse command lines and config file
 	jhMiner_parseCommandline(argc, argv);
+
 	// Sets max sieve size
 	nMaxSieveSize = commandlineInput.sieveSize;
 	nSievePercentage = commandlineInput.sievePercentage;
 	nRoundSievePercentage = commandlineInput.roundSievePercentage;
-   nOverrideTargetValue = commandlineInput.targetOverride;
-   nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+	nOverrideTargetValue = commandlineInput.targetOverride;
+	nOverrideBTTargetValue = commandlineInput.targetBTOverride;
 	nSieveExtensions = commandlineInput.sieveExtensions;
+	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
 
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
-	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
 
-	if(commandlineInput.primorialMultiplier == 0)
-	{
+	if(commandlineInput.primorialMultiplier == 0){
 		primeStats.nPrimorialMultiplier = 37;
 		bEnablenPrimorialMultiplierTuning = true;
-	}
-	else
-	{
+	}else{
 		primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
 		bEnablenPrimorialMultiplierTuning = false;
 	}
 
-	if( commandlineInput.host == NULL )
-	{
-		printf("Missing -o option\n");
+	if( commandlineInput.host == NULL){
+		if( commandlineInput.csApiKey == NULL){
+			std::cout << "Missing required -o or -key option" << std::endl;
+		}else{
+			std::cout << "Missing required -o option, and failed to connect to central server" << std::endl;
+		}
 		exit(-1);	
 	}
 
 	//CRYPTO_set_mem_ex_functions(mallocEx, reallocEx, freeEx);
-	
-	printf(" ============================================================================== \n");
-	printf("|  jhPrimeMiner - mod by rdebourbon -v3.2beta                     |\n");
-	printf("|     optimised from hg5fm (mumus) v7.1 build + HP10 updates      |\n");
-	printf("|  author: JH (http://ypool.net)                                  |\n");
-	printf("|  contributors: x3maniac                                         |\n");
-	printf("|  Credits: Sunny King for the original Primecoin client&miner    |\n");
-	printf("|  Credits: mikaelh for the performance optimizations             |\n");
-	printf("|  Credits: erkmos for the original linux port                    |\n");
-	printf("|  Credits: tandyuk for the linux build of rdebourbons mod        |\n");
-	printf("|                                                                 |\n");
-	printf("|  Donations:                                                   |\n");
-	printf("|        XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv                |\n");
-	printf("|        LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE                |\n");
-	printf("|        BTC: 1Fph7y622HJ5Cwq4bkzfeZXWep2Jyi5kp7                |\n");
-	printf(" ============================================================================== \n");
-	printf("Launching miner...\n");
+	if(!commandlineInput.silent && !commandlineInput.quiet){	
+	std::cout << 
+	" ============================================================================ " << std::endl <<
+	"|  jhPrimeMiner - mod by rdebourbon -v3.2beta                     |" << std::endl <<
+	"|     optimised from hg5fm (mumus) v7.1 build + HP10 updates      |" << std::endl <<
+	"|     jsonrpc stats and remote config added by tandyuk            |" << std::endl <<
+	"|  author: JH (http://ypool.net)                                  |" << std::endl <<
+	"|  contributors: x3maniac                                         |" << std::endl <<
+	"|  Credits: Sunny King for the original Primecoin client&miner    |" << std::endl <<
+	"|  Credits: mikaelh for the performance optimizations             |" << std::endl <<
+	"|  Credits: erkmos for the original linux port                    |" << std::endl <<
+	"|  Credits: tandyuk for the linux build of rdebourbons mod        |" << std::endl <<
+	"|                                                                 |" << std::endl <<
+	"|  Donations:                                                     |" << std::endl <<
+	"|        XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv                  |" << std::endl <<
+	"|        LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE                  |" << std::endl <<
+	"|        BTC: 1Fph7y622HJ5Cwq4bkzfeZXWep2Jyi5kp7                  |" << std::endl <<
+	" ============================================================================ " << std::endl <<
+	"Launching miner..." << std::endl;
+	}
 	// set priority lower so the user still can do other things
 #ifdef _WIN32
 	SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
@@ -1549,7 +1605,9 @@ commandlineInput.targetOverride = 0;
 		pctx = BN_CTX_new();
 	// init prime table
 	GeneratePrimeTable(commandlineInput.sievePrimeLimit);
-	printf("Sieve Percentage: %u %%\n", nSievePercentage);
+	if(!commandlineInput.silent && !commandlineInput.quiet){	
+		std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
+	}
 	// init winsock
 #ifdef WIN32
 	WSADATA wsa;
@@ -1575,61 +1633,28 @@ commandlineInput.targetOverride = 0;
 	}
 	char ipText[32];
 	esprintf(ipText, "%d.%d.%d.%d", ((ip>>0)&0xFF), ((ip>>8)&0xFF), ((ip>>16)&0xFF), ((ip>>24)&0xFF));
-	if( ((ip>>0)&0xFF) != 255 )
-	{
-		printf("Connecting to '%s' (%lu.%lu.%lu.%lu)\n", commandlineInput.host, ((ip>>0)&0xFF), ((ip>>8)&0xFF), ((ip>>16)&0xFF), ((ip>>24)&0xFF));
-	}
 #else
   struct addrinfo hints, *res;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
   getaddrinfo(commandlineInput.host, 0, &hints, &res);
-  char ipText[INET_ADDRSTRLEN];
+  char ipText[32];
   inet_ntop(AF_INET, &((struct sockaddr_in *)res->ai_addr)->sin_addr, ipText, INET_ADDRSTRLEN);
 #endif
   
 	// setup RPC connection data (todo: Read from command line)
 	jsonRequestTarget.ip = ipText;
 	jsonRequestTarget.port = commandlineInput.port;
-	jsonRequestTarget.authUser = commandlineInput.workername;
-	jsonRequestTarget.authPass = commandlineInput.workerpass;
-
-
-
-
-	if(commandlineInput.csEnabled){
-		// connect to host
-#ifdef _WIN32
-	hostent* hostInfo = gethostbyname(commandlineInput.centralServer);
-	if( hostInfo == NULL )
-	{
-		printf("Cannot resolve '%s'. Is it a valid URL?\n", commandlineInput.centralServer);
-		exit(-1);
+	jsonRequestTarget.authUser = (char *)commandlineInput.workername;
+	jsonRequestTarget.authPass = (char *)commandlineInput.workerpass;
+	if(!commandlineInput.silent){	
+		std::cout << "Connecting to '" << commandlineInput.host << "'" << std::endl;
 	}
-	void** ipListPtr = (void**)hostInfo->h_addr_list;
-	uint32 ip = 0xFFFFFFFF;
-	if( ipListPtr[0] )
-	{
-		ip = *(uint32*)ipListPtr[0];
-	}
-	char ipText[32];
-	esprintf(ipText, "%d.%d.%d.%d", ((ip>>0)&0xFF), ((ip>>8)&0xFF), ((ip>>16)&0xFF), ((ip>>24)&0xFF));
-	if( ((ip>>0)&0xFF) != 255 )
-	{
-		printf("Connecting to '%s' (%lu.%lu.%lu.%lu) for stats output and remote config\n", commandlineInput.host, ((ip>>0)&0xFF), ((ip>>8)&0xFF), ((ip>>16)&0xFF), ((ip>>24)&0xFF));
-	}
-#else
-  struct addrinfo hints, *res;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  getaddrinfo(commandlineInput.centralServer, 0, &hints, &res);
-  char ipText[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &((struct sockaddr_in *)res->ai_addr)->sin_addr, ipText, INET_ADDRSTRLEN);
-#endif
-  		statsRequestTarget.ip = ipText;
-		statsRequestTarget.port = commandlineInput.centralServerPort;
-		statsRequestTarget.authPass = "";
-		statsRequestTarget.authUser = "";
+
+
+
+	if(commandlineInput.csEnabled && !commandlineInput.silent){	
+		std::cout << "Using '" << commandlineInput.centralServer << "' for stats output and remote config" << std::endl;
 	}
 
 	// init stats
@@ -1653,33 +1678,20 @@ commandlineInput.targetOverride = 0;
 	primeStats.nWaveRound = 0;
 
 	// setup thread count and print info
-	printf("Using %d threads\n", commandlineInput.numThreads);
-	printf("Username: %s\n", jsonRequestTarget.authUser);
-	printf("Password: %s\n", jsonRequestTarget.authPass);
+	if(!commandlineInput.silent && !commandlineInput.quiet){
+
+	std::cout << "Using " << commandlineInput.numThreads << " threads" << std::endl;
+	std::cout << "Username: " << jsonRequestTarget.authUser << std::endl;
+	std::cout << "Password: " << jsonRequestTarget.authPass << std::endl;
+	}
 	// decide protocol
-	if( commandlineInput.port == 10034 )
-	{
-		// port 10034 indicates xpt protocol (in future we will also add a -o URL prefix)
-		workData.protocolMode = MINER_PROTOCOL_XPUSHTHROUGH;
-		printf("Using x.pushthrough protocol\n");
-	}
-	else
-	{
-		workData.protocolMode = MINER_PROTOCOL_GETWORK;
-		printf("Using GetWork() protocol\n");
-		printf("Warning: \n");
-		printf("   GetWork() is outdated and inefficient. You are losing mining performance\n");
-		printf("   by using it. If the pool supports it, consider switching to x.pushthrough.\n");
-		printf("   Just add the port :10034 to the -o parameter.\n");
-		printf("   Example: jhPrimeminer.exe -o http://poolurl.net:10034 ...\n");
-	}
-	// initial query new work / create new connection
-	if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-	{
-		jhMiner_queryWork_primecoin();
-	}
-	else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
-	{
+	// port 10034 indicates xpt protocol (in future we will also add a -o URL prefix)
+	workData.protocolMode = MINER_PROTOCOL_XPUSHTHROUGH;
+	if(!commandlineInput.silent && !commandlineInput.quiet)
+		std::cout << "Using x.pushthrough protocol" << std::endl;
+	
+
+		// initial query new work / create new connection
 		workData.xptClient = NULL;
 		// x.pushthrough initial connect & login sequence
 		while( true )
@@ -1690,7 +1702,9 @@ commandlineInput.targetOverride = 0;
 				workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads);
 				if( workData.xptClient != NULL )
 					break;
-				printf("Failed to connect, retry in 30 seconds\n");
+					if(!commandlineInput.silent){	
+						std::cout << "Failed to connect, retry in 30 seconds" << std::endl;
+					}
 				Sleep(1000*30);
 			}
 			// make sure we are successfully authenticated
@@ -1711,37 +1725,46 @@ commandlineInput.targetOverride = 0;
 			{
 				break;
 			}
-			if( disconnectReason )
-				printf("xpt error: %s\n", disconnectReason);
+			if( disconnectReason ){
+				if(!commandlineInput.silent){	
+					std::cout << "xpt error: " << disconnectReason << std::endl;
+				}
+			}
 			// delete client
 			xptClient_free(workData.xptClient);
 			// try again in 30 seconds
-			printf("x.pushthrough authentication sequence failed, retry in 30 seconds\n");
-			Sleep(30*1000);
-		}
+			if(!commandlineInput.silent && !commandlineInput.quiet){	
+				std::cout << "x.pushthrough authentication sequence failed, retry in 30 seconds" << std::endl;
+			}
+		Sleep(30*1000);
 	}
+	
+	if(commandlineInput.csEnabled)
+		csNotifySettings();
 
-   printf("\nVal/h = 'Share Value per Hour', PPS = 'Primes per Second', \n");
-   printf("SPS = 'Sieves per Second', ACC = 'Avg. Candidate Count / Sieve' \n");
-   printf("===============================================================\n");
-	printf("Keyboard shortcuts:\n");
-	printf("   <Ctrl-C>, <Q>     - Quit\n");
-	printf("   <Up arrow key>    - Increment Sieve Percentage\n");
-	printf("   <Down arrow key>  - Decrement Sieve Percentage\n");
-	printf("   <Left arrow key>  - Decrement Round Sieve Percentage\n");
-	printf("   <Right arrow key> - Increment Round Sieve Percentage\n");
-	printf("   <P> - Enable/Disable Round Sieve Percentage Auto Tuning\n");
-	printf("   <S> - Print current settings\n");
-	printf("   <[> - Decrement Primorial Multiplier\n");
-	printf("   <]> - Increment Primorial Multiplier\n");
-	printf("   <-> - Decrement Sive size\n");
-	printf("   <+> - Increment Sieve size\n");
-if( commandlineInput.enableCacheTunning ){
-	printf("Note: While the initial auto tuning is in progress several values cannot be changed.\n");
-}
 
-	// enter different mainloops depending on protocol mode
-	if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
+	if(!commandlineInput.silent && !commandlineInput.quiet){
+		std::cout << "\nVal/h = 'Share Value per Hour', PPS = 'Primes per Second'," <<std::endl <<
+		"SPS = 'Sieves per Second', ACC = 'Avg. Candidate Count / Sieve' " << std::endl <<
+		"===============================================================" << std::endl <<
+		"Keyboard shortcuts:" << std::endl <<
+		"   <Ctrl-C>, <Q>     - Quit" << std::endl <<
+		"   <Y> - Increment Primorial Multiplier" << std::endl <<
+		"   <H> - Decrement Primorial Multiplier" << std::endl <<
+		"   <U> - Increment Sieve size" << std::endl <<
+		"   <J> - Decrement Sive size" << std::endl <<
+		"   <R> - Increment Sieve Percentage" << std::endl <<
+		"   <F> - Decrement Sieve Percentage" << std::endl <<
+		"   <T> - Increment Round Sieve Percentage" << std::endl <<
+		"   <G> - Decrement Round Sieve Percentage" << std::endl <<
+		"   <P> - Enable/Disable Round Sieve Percentage Auto Tuning" << std::endl <<
+		"   <S> - Print current settings" << std::endl;
+		if( commandlineInput.enableCacheTunning ){
+			std::cout << "Note: While the initial auto tuning is in progress several values cannot be changed." << std::endl;
+		}
+	}	
+
+	// remove support for getwork completely.
 		return jhMiner_main_xptMode();
 
 	return 0;

@@ -233,8 +233,10 @@ bool xptClient_process(xptClient_t* xptClient)
 		// validate header size
 		if( packetDataSize >= (1024*1024*2-4) )
 		{
-			// packets larger than 4mb are not allowed
-			printf("xptServer_receiveData(): Packet exceeds 2mb size limit\n");
+			// packets larger than 2mb are not allowed
+			if(!commandlineInput.silent){
+				std::cout << "xptServer_receiveData(): Packet exceeds 2mb size limit" << std::endl;
+			}
 			return false;
 		}
 		xptClient->recvSize = packetDataSize;

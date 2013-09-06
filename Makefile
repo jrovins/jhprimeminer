@@ -2,7 +2,7 @@ CXX = g++
 CFLAGS = -mtune=native -O3 -Wall -Wextra -std=c++0x -fomit-frame-pointer
 
 OSVERSION := $(shell uname -s)
-LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread -lcurl
+LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread -lcurl -ljson
 
 ifeq ($(OSVERSION),Linux)
 	LIBS += -lrt
@@ -10,7 +10,7 @@ endif
 
 # You might need to edit these paths too
 LIBPATHS = -L/usr/local/lib -L/usr/lib
-INCLUDEPATHS = -I/usr/local/include -I/usr/include
+INCLUDEPATHS = -I/usr/local/include -I/usr/include -Isrc/primecoinMiner/includes/
 
 ifeq ($(OSVERSION),Darwin)
 	GOT_MACPORTS := $(shell which port)
@@ -26,7 +26,7 @@ JHLIB = src/primecoinMiner/jhlib/customBuffer.o \
 	src/primecoinMiner/jhlib/fastString.o \
 	src/primecoinMiner/jhlib/hashTable_uint32.o \
 	src/primecoinMiner/jhlib/simpleList.o \
-src/primecoinMiner/jhlib/simpleHTTP.o
+	src/primecoinMiner/jhlib/simpleHTTP.o
 
 OBJS = \
 	src/primecoinMiner/bn2.o \

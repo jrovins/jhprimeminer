@@ -23,16 +23,20 @@ bool xptClient_processPacket_authResponse(xptClient_t* xptClient)
 	if( authErrorCode == 0 )
 	{
 		xptClient->clientState = XPT_CLIENT_STATE_LOGGED_IN;
-		printf("xpt: Logged in\n");
-		if( rejectReason[0] != '\0' )
-			printf("Message from server: %s\n", rejectReason);
+		if(!commandlineInput.silent){
+			std::cout << "xpt: Logged in" << std::endl;
+			if( rejectReason[0] != '\0' )
+				std::cout << "Message from server: " << rejectReason << std::endl;
+		}
 	}
 	else
 	{
 		// error logging in -> disconnect
-		printf("xpt: Failed to log in\n");
+		if(!commandlineInput.silent){
+			std::cout << "xpt: Failed to log in" << std::endl;
 		if( rejectReason[0] != '\0' )
-			printf("Reason: %s\n", rejectReason);
+			std::cout << "Reason: " << rejectReason << std::endl;
+		}
 		return false;
 	}
 	return true;
@@ -58,12 +62,14 @@ bool xptClient_processPacket_blockData1(xptClient_t* xptClient)
 	uint32 payloadNum = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);							// payload num
 	if( recvError )
 	{
-		printf("xptClient_processPacket_blockData1(): Parse error\n");
+		if(!commandlineInput.silent && !commandlineInput.quiet)
+			std::cout << "xptClient_processPacket_blockData1(): Parse error" << std::endl;
 		return false;
 	}
 	if( xptClient->payloadNum != payloadNum )
 	{
-		printf("xptClient_processPacket_blockData1(): Invalid payloadNum\n");
+		if(!commandlineInput.silent && !commandlineInput.quiet)
+			std::cout << "xptClient_processPacket_blockData1(): Invalid payloadNum" << std::endl;
 		return false;
 	}
 	for(uint32 i=0; i<payloadNum; i++)
@@ -73,7 +79,8 @@ bool xptClient_processPacket_blockData1(xptClient_t* xptClient)
 	}
 	if( recvError )
 	{
-		printf("xptClient_processPacket_blockData1(): Parse error 2\n");
+		if(!commandlineInput.silent && !commandlineInput.quiet)
+			std::cout << "xptClient_processPacket_blockData1(): Parse error 2" << std::endl;
 		return false;
 	}
 	xptClient->workDataValid = true;
@@ -108,7 +115,8 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 		valid_shares++;
 		time_t now = time(0);
 		char* dt = ctime(&now);
-		printf("ACCEPTED [ %d / %d val: %.6f] %s", valid_shares, total_shares, shareValue, dt);
+		if(!commandlineInput.silent)
+			std::cout << "ACCEPTED [ " << valid_shares << " / " << total_shares << " val: " << shareValue << "] " << dt << std::endl;
 		primeStats.fShareValue += shareValue;
 		primeStats.fBlockShareValue += shareValue;
 		primeStats.fTotalSubmittedShareValue += shareValue;
@@ -117,13 +125,15 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 	{
 		// error logging in -> disconnect
 		total_shares++;
-		printf("Invalid share\n");
-		if( rejectReason[0] != '\0' )
-			printf("Reason: %s\n", rejectReason);
+		if(!commandlineInput.silent){
+			std::cout << "Invalid share" << std::endl;
+			if( rejectReason[0] != '\0' )
+				std::cout << "Reason: " << rejectReason << std::endl;
+		}
 	}
 
 	if(commandlineInput.csEnabled){
-		NEWnotifyCentralServerofShare(shareErrorCode, shareValue, rejectReason);
+		csNotifyShare(shareErrorCode, shareValue, rejectReason);
 	}
 	return true;
 }

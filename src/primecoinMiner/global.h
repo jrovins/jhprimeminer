@@ -32,7 +32,6 @@ typedef unsigned __int64 uint64_t;
 #include <netdb.h>
 #include <sys/fcntl.h>
 #include <unistd.h>
-#include <stdint.h>
 #include <signal.h>
 #define Sleep(ms) usleep(1000*ms)
 #include <pthread.h>
@@ -46,6 +45,7 @@ typedef uint32_t DWORD;
 #include<time.h>
 #include<set>
 #include<stdint.h>
+#include <iomanip>
 
 #include"sha256.h"
 #include"ripemd160.h"
@@ -190,6 +190,10 @@ uint64 blockStartTime;
 	bool shareFound;
 	bool shareRejected;
 	volatile unsigned int nL1CacheElements;
+	sint32 lastShareThreadIndex;
+	float lastShareDiff;
+	unsigned int lastShareType;
+
 
 }primeStats_t;
 
@@ -216,10 +220,6 @@ typedef struct
 
 extern jsonRequestTarget_t jsonRequestTarget; // rpc login data
 
-//for central server
-extern jsonRequestTarget_t statsRequestTarget; // rpc login data
-
-
 // prototypes from main.cpp
 bool error(const char *format, ...);
 bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock);
@@ -228,35 +228,75 @@ uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
 
-void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
+typedef struct  
+{
+	bool dataIsValid;
+	uint8 data[128];
+	uint32 dataHash; // used to detect work data changes
+	uint8 serverData[32]; // contains data from the server 
+}workDataEntry_t;
 
 typedef struct  
+{
+#ifdef _WIN32
+	CRITICAL_SECTION cs;
+#else
+  pthread_mutex_t cs;
+#endif
+	uint8 protocolMode;
+	// xpm
+	workDataEntry_t workEntry[128]; // work data for each thread (up to 128)
+	// x.pushthrough
+	xptClient_t* xptClient;
+}workData_t;
+
+extern workData_t workData;
+
+
+#ifdef _WIN32
+static void CacheAutoTuningWorkerThread(bool bEnabled);
+#else
+void *CacheAutoTuningWorkerThread(void * arg);
+#endif
+
+
+void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex);
+
+typedef struct
 {
 	char* workername;
 	char* workerpass;
 	char* host;
-	sint32 port;
-	sint32 numThreads;
-	sint32 sieveSize;
-	sint32 sievePercentage;
-	sint32 roundSievePercentage;
-	sint32 sievePrimeLimit;	// how many primes should be sieved
+	uint32 port;
+	uint32 numThreads;
+	uint32 sieveSize;
+	uint32 sievePercentage;
+	uint32 roundSievePercentage;
+	uint32 sievePrimeLimit;	// how many primes should be sieved
 	unsigned int L1CacheElements;
 	unsigned int primorialMultiplier;
 	bool enableCacheTunning;
-   sint32 targetOverride;
-   sint32 targetBTOverride;
-   sint32 initialPrimorial;
-   char* centralServer;
-   sint32 centralServerPort;
-   char* csApiKey;
-   bool csEnabled;
-   bool printDebug;
-	sint32 sieveExtensions;
-
+	uint32 targetOverride;
+	uint32 targetBTOverride;
+	uint32 initialPrimorial;
+	uint32 sieveExtensions;
+	uint32 centralServerPort;
+	bool csEnabled;
+	char* centralServer;
+	char* csApiKey;
+	bool printDebug;
+	int64_t csUUID;
+	bool weakSSL;
+	char* configfile;
+	bool quiet;
+	bool silent;
 }commandlineInput_t;
 
 extern commandlineInput_t commandlineInput;
+extern commandlineInput_t OldCommandlineInput;
+extern bool bEnablenPrimorialMultiplierTuning;
+extern bool bOptimalL1SearchInProgress;
+extern BYTE nRoundSievePercentage;
 
 
 // direct access to share counters
