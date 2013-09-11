@@ -1560,7 +1560,7 @@ int main(int argc, char **argv)
 	commandlineInput.nullShareTimeout = 0; //disabled by default
 	commandlineInput.csStaticUUID = false;
 
-	std::cout << std::fixed << std::showpoint << std::setprecision(4);
+	std::cout << std::fixed << std::showpoint << std::setprecision(8);
 
 
 	// parse command lines and config file
