@@ -3,12 +3,12 @@
 #include "ticker.h"
 
 
-bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& bnFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
+bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& bnFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
 							unsigned int& , unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier);
 
 std::set<mpz_class> multiplierSet;
 
-void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
+void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex)
 {
 	//printf("PrimecoinMiner started\n");
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -29,8 +29,6 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 //	bool fIncrementPrimorial = true; // increase or decrease primorial factor   unused?
 //	uint64_t nSieveGenTime = 0;   unused?
 	
-
-	CSieveOfEratosthenes* psieve = NULL;
 
 	//primecoinBlock->nonce = 0;
 	//TODO: check this if it makes sense
@@ -133,7 +131,7 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		//printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
-		MineProbablePrimeChain(&psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
+		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
 
 		//{
 		//	// do nothing here, share is already submitted in MineProbablePrimeChain()
@@ -155,11 +153,6 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, sint32 threadIndex)
 		primecoinBlock->nonce ++;
 		//primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
 		loopCount++;
-	}
-	if( psieve )
-	{
-		delete psieve;
-		psieve = NULL;
 	}
 	
 }

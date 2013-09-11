@@ -279,6 +279,45 @@ static bool IsXptClientConnected()
 }
 #endif
 
+
+int getNumThreads(void) {
+  // based on code from ceretullis on SO
+  uint32_t numcpu = 1; // in case we fall through;
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+  int mib[4];
+  size_t len = sizeof(numcpu); 
+
+  /* set the mib for hw.ncpu */
+  mib[0] = CTL_HW;
+#ifdef HW_AVAILCPU
+  mib[1] = HW_AVAILCPU;  // alternatively, try HW_NCPU;
+#else
+  mib[1] = HW_NCPU;
+#endif
+  /* get the number of CPUs from the system */
+sysctl(mib, 2, &numcpu, &len, NULL, 0);
+
+    if( numcpu < 1 )
+    {
+      numcpu = 1;
+    }
+
+#elif defined(__linux__) || defined(sun) || defined(__APPLE__)
+  numcpu = static_cast<uint32_t>(sysconf(_SC_NPROCESSORS_ONLN));
+#elif defined(_SYSTYPE_SVR4)
+  numcpu = sysconf( _SC_NPROC_ONLN );
+#elif defined(hpux)
+  numcpu = mpctl(MPC_GETNUMSPUS, NULL, NULL);
+#elif defined(_WIN32)
+  SYSTEM_INFO sysinfo;
+  GetSystemInfo( &sysinfo );
+  numcpu = sysinfo.dwNumberOfProcessors;
+#endif
+  
+  return numcpu;
+}
+
+
 /*
 void jhMiner_queryWork_primecoin()
 {
@@ -360,10 +399,11 @@ uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 int jhMiner_workerThread_xpt(int threadIndex)
 {
 #else
-void *jhMiner_workerThread_xpt(void *arg)
-{
-  uint32_t threadIndex = static_cast<uint32_t>((uintptr_t)arg);
+void *jhMiner_workerThread_xpt(void *arg){
+uint32_t threadIndex = static_cast<uint32_t>((uintptr_t)arg);
 #endif
+
+	CSieveOfEratosthenes* psieve = NULL;
 	while( true )
 	{
 		uint8 localBlockData[128];
@@ -395,9 +435,14 @@ void *jhMiner_workerThread_xpt(void *arg)
 		memcpy(&primecoinBlock.serverData, serverData, 32);
 		// start mining
 		//uint32 time1 = GetTickCount();
-      		BitcoinMiner(&primecoinBlock, threadIndex);
+      	BitcoinMiner(&primecoinBlock, psieve, threadIndex);
 		//printf("Mining stopped after %dms\n", GetTickCount()-time1);
 		primecoinBlock.mpzPrimeChainMultiplier = 0;
+	}
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
 	}
 	return 0;
 }
@@ -905,7 +950,72 @@ void jhMiner_parseCommandline(int argc, char **argv)
 
 
 
+#ifdef _WIN32
+typedef std::pair <DWORD, HANDLE> thMapKeyVal;
+uint64 * threadHearthBeat;
 
+static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
+#else
+static void *watchdog_thread(void *)
+#endif
+{
+	if(commandlineInput.nullShareTimeout>0){
+		uint32 maxTimeBetweenShareSubmit = commandlineInput.nullShareTimeout * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
+#ifdef _WIN32
+	   	uint32 maxIdelTime = 10 * 1000;
+		std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
+#endif
+	   while(true){
+		   if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds()){
+				// Something must be wrong, no accepted shares for a long time
+				if(!commandlineInput.silent){
+					std::cout << "Error - Watchdog - No accepted shares for too long!" << std::endl;
+				}
+#ifdef _WIN32
+				if (!IsXptClientConnected())
+					continue;
+				uint64 currentTick = getTimeMilliseconds();
+				for (int i = 0; i < threadMap.size(); i++){
+					DWORD heartBeatTick = threadHearthBeat[i];
+					if (currentTick - heartBeatTick > maxIdelTime){
+						//restart the thread
+						if(!commandlineInput.silent){
+							std::cout << "Restarting thread " << i << std::endl;
+						}
+						//__try
+						//{
+							//HANDLE h = threadMap.at(i);
+							thMap_Iter = threadMap.find(i);
+							if (thMap_Iter != threadMap.end()){
+								HANDLE h = thMap_Iter->second;
+								TerminateThread( h, 0);
+								Sleep(1000);
+								CloseHandle(h);
+								Sleep(1000);
+								threadHearthBeat[i] = getTimeMilliseconds();
+								threadMap.erase(thMap_Iter);
+								h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
+								SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
+								threadMap.insert(thMapKeyVal(i,h));
+							}
+						/*}
+						__except(EXCEPTION_EXECUTE_HANDLER)
+						{
+						}*/
+					}
+				}
+#else
+				//on linux just exit
+				exit(-2000);
+#endif
+				Sleep( 10*1000);
+			}
+		}
+	}
+}
+
+
+bool fIncrementPrimorial = true;
 
 #ifdef _WIN32
 static void CacheAutoTuningWorkerThread(bool bEnabled)
@@ -1223,69 +1333,6 @@ static struct termios oldt, newt;
 }
 
 
-#ifdef _WIN32
-typedef std::pair <DWORD, HANDLE> thMapKeyVal;
-uint64 * threadHearthBeat;
-
-static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
-#else
-static void *watchdog_thread(void *)
-#endif
-{
-	if(commandlineInput.nullShareTimeout>0){
-		uint32 maxTimeBetweenShareSubmit = commandlineInput.nullShareTimeout * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
-#ifdef _WIN32
-	   	uint32 maxIdelTime = 10 * 1000;
-		std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
-#endif
-	   while(true){
-		   if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds()){
-				// Something must be wrong, no accepted shares for a long time
-				if(!commandlineInput.silent){
-					std::cout << "Error - Watchdog - No accepted shares for too long!" << std::endl;
-				}
-#ifdef _WIN32
-				if (!IsXptClientConnected())
-					continue;
-				uint64 currentTick = getTimeMilliseconds();
-				for (int i = 0; i < threadMap.size(); i++){
-					DWORD heartBeatTick = threadHearthBeat[i];
-					if (currentTick - heartBeatTick > maxIdelTime){
-						//restart the thread
-						if(!commandlineInput.silent){
-							std::cout << "Restarting thread " << i << std::endl;
-						}
-						//__try
-						//{
-							//HANDLE h = threadMap.at(i);
-							thMap_Iter = threadMap.find(i);
-							if (thMap_Iter != threadMap.end()){
-								HANDLE h = thMap_Iter->second;
-								TerminateThread( h, 0);
-								Sleep(1000);
-								CloseHandle(h);
-								Sleep(1000);
-								threadHearthBeat[i] = getTimeMilliseconds();
-								threadMap.erase(thMap_Iter);
-								h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
-								SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
-								threadMap.insert(thMapKeyVal(i,h));
-							}
-						/*}
-						__except(EXCEPTION_EXECUTE_HANDLER)
-						{
-						}*/
-					}
-				}
-#else
-				//on linux just exit
-				exit(-2000);
-#endif
-				Sleep( 10*1000);
-			}
-		}
-	}
-}
 
 /*
  * Mainloop when using xpt mode
@@ -1333,10 +1380,7 @@ int jhMiner_main_xptMode()
   // start threads
 	for(uint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
   {
-	pthread_create(&threads[threadIdx], 
-                   &threadAttr, 
-                   jhMiner_workerThread_xpt, 
-                   (void *)threadIdx);
+	pthread_create(&threads[threadIdx], &threadAttr, jhMiner_workerThread_xpt, (void *)threadIdx);
   }
   pthread_attr_destroy(&threadAttr);
 #endif
@@ -1382,10 +1426,10 @@ int jhMiner_main_xptMode()
 				std::cout << "Val/h: " << shareValuePerHour << " - PPS: " << (sint32)primesPerSecond << " - SPS: " << sievesPerSecond << " - ACC: " << (sint32)avgCandidatesPerRound << std::endl;
 				std::cout << " Chain/Hr:  ";
 				for(int i=6; i<=std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++){
-	               std::cout << i << ": " <<  std::setprecision(2) << (((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0) << " ";
+	            		   std::cout << i << ": " <<  std::setprecision(2) << (((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0) << " ";
 				}
+				std::cout << std::setprecision(8);
 				std::cout << std::endl;
-				//printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
 			}
 			}
 		}
@@ -1396,12 +1440,6 @@ int jhMiner_main_xptMode()
 			uint64 tickCount = getTimeMilliseconds();
 			uint64 passedTime = tickCount - time_updateWork;
 
-
-	/*		if (tickCount - time_multiAdjust >= 60000)
-			{
-				MultiplierAutoAdjust();
-				time_multiAdjust = getTimeMilliseconds();
-			}*/
 
 			if( passedTime >= 4000 )
 				break;
@@ -1469,8 +1507,9 @@ int jhMiner_main_xptMode()
 					if(!commandlineInput.silent && !commandlineInput.quiet){
 						std::cout << std::endl << "--------------------------------------------------------------------------------" << std::endl;
 						std::cout << "New Block: " << workData.xptClient->blockWorkInfo.height << " - Diff: " << blockDiff << " / " << poolDiff << std::endl;
-						std::cout << "Total/Valid shares: [ " << total_shares << " / " << valid_shares << " ]  -  Max diff: " << primeStats.bestPrimeChainDifficultySinceLaunch << std::endl;
+						std::cout << "Valid/Total shares: [ " << valid_shares << " / " << total_shares << " ]  -  Max diff: " << primeStats.bestPrimeChainDifficultySinceLaunch << std::endl;
                statsPassedTime = (double)(getTimeMilliseconds() - primeStats.blockStartTime);
+
                if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
                for (int i = 6; i <= std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
                {
@@ -1537,10 +1576,9 @@ int main(int argc, char **argv)
 	nOverrideTargetValue = commandlineInput.targetOverride;
 	nOverrideBTTargetValue = commandlineInput.targetBTOverride;
 	nSieveExtensions = commandlineInput.sieveExtensions;
-	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
-
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
+	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
 
 	if(commandlineInput.primorialMultiplier == 0){
 		primeStats.nPrimorialMultiplier = 37;
@@ -1563,7 +1601,7 @@ int main(int argc, char **argv)
 	if(!commandlineInput.silent && !commandlineInput.quiet){	
 	std::cout << 
 	" ============================================================================ " << std::endl <<
-	"|  jhPrimeMiner - mod by rdebourbon -v3.2beta                     |" << std::endl <<
+	"|  jhPrimeMiner - mod by rdebourbon -v3.3beta                     |" << std::endl <<
 	"|     optimised from hg5fm (mumus) v7.1 build + HP10 updates      |" << std::endl <<
 	"|     jsonrpc stats and remote config added by tandyuk            |" << std::endl <<
 	"|  author: JH (http://ypool.net)                                  |" << std::endl <<
@@ -1573,10 +1611,10 @@ int main(int argc, char **argv)
 	"|  Credits: erkmos for the original linux port                    |" << std::endl <<
 	"|  Credits: tandyuk for the linux build of rdebourbons mod        |" << std::endl <<
 	"|                                                                 |" << std::endl <<
-	"|  Donations:                                                     |" << std::endl <<
-	"|        XPM: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv                  |" << std::endl <<
-	"|        LTC: LV7VHT3oGWQzG9EKjvSXd3eokgNXj6ciFE                  |" << std::endl <<
-	"|        BTC: 1Fph7y622HJ5Cwq4bkzfeZXWep2Jyi5kp7                  |" << std::endl <<
+	"|  Donations (XPM):                                               |" << std::endl <<
+	"|    JH: Not sure.. coming soon....                               |" << std::endl <<
+	"|    rdebourbon: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv               |" << std::endl <<
+	"|    tandyuk: AYwmNUt6tjZJ1nPPUxNiLCgy1D591RoFn4                  |" << std::endl <<
 	" ============================================================================ " << std::endl <<
 	"Launching miner..." << std::endl;
 	}
