@@ -479,6 +479,8 @@ void jhMiner_printHelp()
 	cout << "  -primes <num>                  Sets how many prime factors are used to filter the sieve" << endl;
 	cout << "                                 Default is MaxSieveSize. Valid range: 300 - 200000000" << endl;
 	cout << "  -tune [true|false|1|0]         Enable Auto Tuning" << endl;
+	cout << "  -ns <num>                      Null Share Timeout (Default: 0)" << endl;
+	cout << "                                 After this many minutes with 0 shares, miner will exit. 0 to disable" << endl;
 	cout << "Example usage:" << endl;
 #ifndef _WIN32
 	cout << "  jhprimeminer -o http://poolurl.com:10034 -u workername -p workerpass" << endl;
@@ -855,7 +857,19 @@ void jhMiner_parseCommandline(int argc, char **argv)
 			}
 			cIdx++;
 		}
-	  	  else if( memcmp(argument, "-quiet", 7)==0 )
+	  		else if( memcmp(argument, "-ns", 4)==0 )
+		{
+			// -target
+			if( cIdx >= argc )
+			{
+				cout << "Missing number after -ns option" << endl;
+				exit(0);
+			}
+			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
+			cIdx++;
+		}
+
+		else if( memcmp(argument, "-quiet", 7)==0 )
       {
 		bool arg = false;
         // -sslnoverify doesnt need an argument.
@@ -1224,6 +1238,15 @@ static struct termios oldt, newt;
 				nRoundSievePercentage--;
 			std::cout << "Round Sieve Percentage: " << nRoundSievePercentage << "%" << std::endl;
 			break;
+		case 'w': case 'W':
+			std::cout << "Writing Current Config To: " << commandlineInput.configfile;
+			if(saveConfigJSON()){
+				std::cout << ": Success" << std::endl;
+			}else{
+				std::cout << ": Failed" <<std::endl;
+			}
+			break;
+
 		}
 	}
 #ifdef _WIN32
@@ -1245,66 +1268,59 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 static void *watchdog_thread(void *)
 #endif
 {
-   uint32 maxTimeBetweenShareSubmit = 30 * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
+	if(commandlineInput.nullShareTimeout>0){
+		uint32 maxTimeBetweenShareSubmit = commandlineInput.nullShareTimeout * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
 #ifdef _WIN32
-   	uint32 maxIdelTime = 10 * 1000;
-std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
+	   	uint32 maxIdelTime = 10 * 1000;
+		std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
 #endif
-   while(true)
-		{
-	  if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds())
-	  {
-		// Something must be wrong, no accepted shares for a long time
-		if(!commandlineInput.silent){
-			std::cout << "Error - Watchdog - No accepted shares for too long!" << std::endl;
-		}
-		exit (EXIT_FAILURE);		// Quit the application - It WOULD be better to reinitialize the entire application
-	  }
-#ifdef _WIN32
-
-			if (!IsXptClientConnected())
-				continue;
-			uint64 currentTick = getTimeMilliseconds();
-
-			for (int i = 0; i < threadMap.size(); i++)
-			{
-				DWORD heartBeatTick = threadHearthBeat[i];
-				if (currentTick - heartBeatTick > maxIdelTime)
-				{
-					//restart the thread
-					if(!commandlineInput.silent){
-						std::cout << "Restarting thread " << i << std::endl;
-					}
-					//__try
-					//{
-
-						//HANDLE h = threadMap.at(i);
-						thMap_Iter = threadMap.find(i);
-						if (thMap_Iter != threadMap.end())
-						{
-							HANDLE h = thMap_Iter->second;
-							TerminateThread( h, 0);
-							Sleep(1000);
-							CloseHandle(h);
-							Sleep(1000);
-							threadHearthBeat[i] = getTimeMilliseconds();
-							threadMap.erase(thMap_Iter);
-
-							h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
-							SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
-
-							threadMap.insert(thMapKeyVal(i,h));
-
-						}
-					/*}
-					__except(EXCEPTION_EXECUTE_HANDLER)
-					{
-					}*/
+	   while(true){
+		   if (lastShareSubmit+maxTimeBetweenShareSubmit < getTimeMilliseconds()){
+				// Something must be wrong, no accepted shares for a long time
+				if(!commandlineInput.silent){
+					std::cout << "Error - Watchdog - No accepted shares for too long!" << std::endl;
 				}
-			}
+#ifdef _WIN32
+				if (!IsXptClientConnected())
+					continue;
+				uint64 currentTick = getTimeMilliseconds();
+				for (int i = 0; i < threadMap.size(); i++){
+					DWORD heartBeatTick = threadHearthBeat[i];
+					if (currentTick - heartBeatTick > maxIdelTime){
+						//restart the thread
+						if(!commandlineInput.silent){
+							std::cout << "Restarting thread " << i << std::endl;
+						}
+						//__try
+						//{
+							//HANDLE h = threadMap.at(i);
+							thMap_Iter = threadMap.find(i);
+							if (thMap_Iter != threadMap.end()){
+								HANDLE h = thMap_Iter->second;
+								TerminateThread( h, 0);
+								Sleep(1000);
+								CloseHandle(h);
+								Sleep(1000);
+								threadHearthBeat[i] = getTimeMilliseconds();
+								threadMap.erase(thMap_Iter);
+								h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
+								SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
+								threadMap.insert(thMapKeyVal(i,h));
+							}
+						/*}
+						__except(EXCEPTION_EXECUTE_HANDLER)
+						{
+						}*/
+					}
+				}
+#else
+				//on linux just exit
+				exit(-2000);
 #endif
-			Sleep( 10*1000);
+				Sleep( 10*1000);
+			}
 		}
+	}
 }
 
 /*
@@ -1541,6 +1557,11 @@ int main(int argc, char **argv)
 	commandlineInput.configfile = "jhprimeminer.conf";
 	commandlineInput.quiet = false;
 	commandlineInput.silent = false;
+	commandlineInput.nullShareTimeout = 0; //disabled by default
+	commandlineInput.csStaticUUID = false;
+
+	std::cout << std::fixed << std::showpoint << std::setprecision(4);
+
 
 	// parse command lines and config file
 	jhMiner_parseCommandline(argc, argv);
@@ -1758,7 +1779,8 @@ int main(int argc, char **argv)
 		"   <T> - Increment Round Sieve Percentage" << std::endl <<
 		"   <G> - Decrement Round Sieve Percentage" << std::endl <<
 		"   <P> - Enable/Disable Round Sieve Percentage Auto Tuning" << std::endl <<
-		"   <S> - Print current settings" << std::endl;
+		"   <S> - Print current settings" << std::endl <<
+		"   <W> - Write current settings to config file" << std::endl;
 		if( commandlineInput.enableCacheTunning ){
 			std::cout << "Note: While the initial auto tuning is in progress several values cannot be changed." << std::endl;
 		}

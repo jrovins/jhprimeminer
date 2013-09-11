@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 
 
 //curl
@@ -15,9 +16,9 @@ void csNotifyStats(){
 	json_object *jsonobj = json_object_new_object();
 	if(const int64_t uuid = csGetUUID()){
 		json_object_object_add(jsonobj, "key", json_object_new_string(commandlineInput.csApiKey));
-		json_object_object_add(jsonobj, "uuid", json_object_new_int64(uuid));
-		json_object_object_add(jsonobj, "blockend", json_object_new_int64(workData.xptClient->blockWorkInfo.nTime));
-		json_object_object_add(jsonobj, "blocknum", json_object_new_int64(workData.xptClient->blockWorkInfo.height-1));
+		json_object_object_add(jsonobj, "uuid", json_object_new_int(uuid));
+		json_object_object_add(jsonobj, "blockend", json_object_new_int(workData.xptClient->blockWorkInfo.nTime));
+		json_object_object_add(jsonobj, "blocknum", json_object_new_int(workData.xptClient->blockWorkInfo.height-1));
 		json_object_object_add(jsonobj, "val", json_object_new_double(primeStats.fBlockShareValue));
 		json_object_object_add(jsonobj, "sieves", json_object_new_double(primeStats.nSieveRounds));
 		json_object_object_add(jsonobj, "candidates", json_object_new_double(primeStats.nCandidateCount));
@@ -62,35 +63,35 @@ void csNotifySettings(){
 			OldCommandlineInput.host = commandlineInput.host;
 		}
 		if(OldCommandlineInput.port != commandlineInput.port){
-			json_object_object_add(jsonobj, "port", json_object_new_int64(commandlineInput.port));
+			json_object_object_add(jsonobj, "port", json_object_new_int(commandlineInput.port));
 			OldCommandlineInput.port = commandlineInput.port;
 		}
 		if(OldCommandlineInput.numThreads != commandlineInput.numThreads){
-			json_object_object_add(jsonobj, "numthreads", json_object_new_int64(commandlineInput.numThreads));
+			json_object_object_add(jsonobj, "numthreads", json_object_new_int(commandlineInput.numThreads));
 			OldCommandlineInput.numThreads = commandlineInput.numThreads;
 		}
 		if(OldCommandlineInput.sieveSize != commandlineInput.sieveSize){
-			json_object_object_add(jsonobj, "sievesize", json_object_new_int64(commandlineInput.sieveSize));
+			json_object_object_add(jsonobj, "sievesize", json_object_new_int(commandlineInput.sieveSize));
 			OldCommandlineInput.sieveSize = commandlineInput.sieveSize;
 		}
 		if(OldCommandlineInput.sievePercentage != commandlineInput.sievePercentage){
-			json_object_object_add(jsonobj, "sievepercentage", json_object_new_int64(commandlineInput.sievePercentage));
+			json_object_object_add(jsonobj, "sievepercentage", json_object_new_int(commandlineInput.sievePercentage));
 			OldCommandlineInput.sievePercentage = commandlineInput.sievePercentage;
 		}
 		if(OldCommandlineInput.roundSievePercentage != commandlineInput.roundSievePercentage){
-			json_object_object_add(jsonobj, "roundsievepercentage", json_object_new_int64(commandlineInput.roundSievePercentage));
+			json_object_object_add(jsonobj, "roundsievepercentage", json_object_new_int(commandlineInput.roundSievePercentage));
 			OldCommandlineInput.roundSievePercentage = commandlineInput.roundSievePercentage;
 		}
 		if(OldCommandlineInput.sievePrimeLimit != commandlineInput.sievePrimeLimit){
-			json_object_object_add(jsonobj, "sieveprimelimit", json_object_new_int64(commandlineInput.sievePrimeLimit));
+			json_object_object_add(jsonobj, "sieveprimelimit", json_object_new_int(commandlineInput.sievePrimeLimit));
 			OldCommandlineInput.sievePrimeLimit = commandlineInput.sievePrimeLimit;
 		}
 		if(OldCommandlineInput.L1CacheElements != commandlineInput.L1CacheElements){
-			json_object_object_add(jsonobj, "cacheelements", json_object_new_int64(commandlineInput.L1CacheElements));
+			json_object_object_add(jsonobj, "cacheelements", json_object_new_int(commandlineInput.L1CacheElements));
 			OldCommandlineInput.L1CacheElements = commandlineInput.L1CacheElements;
 		}
 		if(OldCommandlineInput.primorialMultiplier != commandlineInput.primorialMultiplier){
-			json_object_object_add(jsonobj, "primorialmultiplier", json_object_new_int64(commandlineInput.primorialMultiplier));
+			json_object_object_add(jsonobj, "primorialmultiplier", json_object_new_int(commandlineInput.primorialMultiplier));
 			OldCommandlineInput.primorialMultiplier = commandlineInput.primorialMultiplier;
 		}
 		if(OldCommandlineInput.enableCacheTunning != commandlineInput.enableCacheTunning){
@@ -141,9 +142,9 @@ void csNotifySettings(){
 		//add json object headers:
 		json_object_object_add(jsonobj, "command", json_object_new_string("syncSettings"));
 		json_object_object_add(jsonobj, "key", json_object_new_string(commandlineInput.csApiKey));
-		json_object_object_add(jsonobj, "uuid", json_object_new_int64(uuid));
-		json_object_object_add(jsonobj, "blocknum", json_object_new_int64(workData.xptClient->blockWorkInfo.height));
-		json_object_object_add(jsonobj, "timestamp", json_object_new_int64(time(0)));
+		json_object_object_add(jsonobj, "uuid", json_object_new_int(uuid));
+		json_object_object_add(jsonobj, "blocknum", json_object_new_int(workData.xptClient->blockWorkInfo.height));
+		json_object_object_add(jsonobj, "timestamp", json_object_new_int(time(0)));
 
 		std::string url = commandlineInput.centralServer;
 		std::string request = json_object_to_json_string(jsonobj);
@@ -181,7 +182,7 @@ int64_t csGetUUID(){
 				std::cout << "Error from json: " << json_object_to_json_string(jsonresponse) << std::endl;
 				return 0;
 			}
-			if(!(commandlineInput.csUUID = json_object_get_int64(json_object_object_get(jsonresponse,"uuid")))){
+			if(!(commandlineInput.csUUID = json_object_get_int(json_object_object_get(jsonresponse,"uuid")))){
 				std::cout << "Error getting UUID" << std::endl;
 				return 0;
 			}
@@ -200,7 +201,7 @@ void csNotifyShare(uint32 shareErrorCode, float shareValue, char* rejectReason){
 	json_object *jsonobj = json_object_new_object();
 	if(const int64_t uuid = csGetUUID()){
 		json_object_object_add(jsonobj, "key", json_object_new_string(commandlineInput.csApiKey));
-		json_object_object_add(jsonobj, "uuid", json_object_new_int64(uuid));
+		json_object_object_add(jsonobj, "uuid", json_object_new_int(uuid));
 		bool bValidShare;
 		if( shareErrorCode == 0 ){
 			bValidShare=true;
@@ -211,9 +212,9 @@ void csNotifyShare(uint32 shareErrorCode, float shareValue, char* rejectReason){
 		if( rejectReason[0] != '\0' ){
 			json_object_object_add(jsonobj, "rejectreason", json_object_new_string(rejectReason));
 		}
-		json_object_object_add(jsonobj, "thread", json_object_new_int64(primeStats.lastShareThreadIndex));
+		json_object_object_add(jsonobj, "thread", json_object_new_int(primeStats.lastShareThreadIndex));
 		json_object_object_add(jsonobj, "diff", json_object_new_double(primeStats.lastShareDiff));
-		json_object_object_add(jsonobj, "type", json_object_new_int64(primeStats.lastShareType));
+		json_object_object_add(jsonobj, "type", json_object_new_int(primeStats.lastShareType));
 		json_object_object_add(jsonobj, "sharevalue", json_object_new_double(shareValue));
 		json_object_object_add(jsonobj, "command", json_object_new_string("notifyShare"));
 
@@ -292,19 +293,55 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		if(memcmp(key, "apikey", 7) == 0){commandlineInput.csApiKey = (char *)json_object_get_string(val);}
 		if(memcmp(key, "sieveextensions", 16) == 0){commandlineInput.sieveExtensions = json_object_get_int(val);}
 		if(memcmp(key, "weakssl", 8) == 0){commandlineInput.weakSSL = json_object_get_boolean(val);}
-		if(memcmp(key, "csenabled", 10) == 0){commandlineInput.csEnabled = json_object_get_boolean(val);}
 		if(memcmp(key, "quiet", 6) == 0){commandlineInput.quiet = json_object_get_boolean(val);}
 		if(memcmp(key, "silent", 7) == 0){commandlineInput.silent = json_object_get_boolean(val);}
-
+		if(memcmp(key, "csenabled", 10) == 0){commandlineInput.csEnabled = json_object_get_boolean(val);}
+		if(memcmp(key, "csstaticuuid", 13) == 0){commandlineInput.csStaticUUID = json_object_get_boolean(val);}
+		if(memcmp(key, "uuid", 5) == 0){commandlineInput.csUUID = json_object_get_int(val);}
+		if(memcmp(key, "nullsharetimeout", 17) == 0){commandlineInput.nullShareTimeout = json_object_get_int(val);}
+		
+		
 	}
 	return true;
 }
 
 
-bool saveConfigJSON(std::string configdata){
+bool saveConfigJSON(){
+	json_object *jsonobj = json_object_new_object();
+	if(commandlineInput.csStaticUUID){
+		json_object_object_add(jsonobj, "uuid", json_object_new_int(csGetUUID()));
+		json_object_object_add(jsonobj, "csstaticuuid", json_object_new_boolean(commandlineInput.csEnabled));
+	}
 
 
-	return true;
+	json_object_object_add(jsonobj, "workername", json_object_new_string(commandlineInput.workername));
+	json_object_object_add(jsonobj, "workerpass", json_object_new_string(commandlineInput.workerpass));
+	json_object_object_add(jsonobj, "host", json_object_new_string(commandlineInput.host));
+	json_object_object_add(jsonobj, "port", json_object_new_int(commandlineInput.port));
+	json_object_object_add(jsonobj, "numthreads", json_object_new_int(commandlineInput.numThreads));
+	json_object_object_add(jsonobj, "sievesize", json_object_new_int(commandlineInput.sieveSize));
+	json_object_object_add(jsonobj, "sievepercentage", json_object_new_int(commandlineInput.sievePercentage));
+	json_object_object_add(jsonobj, "roundsievepercentage", json_object_new_int(commandlineInput.roundSievePercentage));
+	json_object_object_add(jsonobj, "sieveprimelimit", json_object_new_int(commandlineInput.sievePrimeLimit));
+	json_object_object_add(jsonobj, "cacheelements", json_object_new_int(commandlineInput.L1CacheElements));
+	json_object_object_add(jsonobj, "primorialmultiplier", json_object_new_int(commandlineInput.primorialMultiplier));
+	json_object_object_add(jsonobj, "cachetuning", json_object_new_boolean(commandlineInput.enableCacheTunning));
+	json_object_object_add(jsonobj, "target", json_object_new_int(commandlineInput.targetOverride));
+	json_object_object_add(jsonobj, "bttarget", json_object_new_int(commandlineInput.targetBTOverride));
+	json_object_object_add(jsonobj, "initialprimorial", json_object_new_int(commandlineInput.initialPrimorial));
+	json_object_object_add(jsonobj, "centralserver", json_object_new_string(commandlineInput.centralServer));
+	json_object_object_add(jsonobj, "centralserverport", json_object_new_int(commandlineInput.centralServerPort));
+	json_object_object_add(jsonobj, "sieveextensions", json_object_new_int(commandlineInput.sieveExtensions));
+	json_object_object_add(jsonobj, "weakssl", json_object_new_boolean(commandlineInput.weakSSL));
+	json_object_object_add(jsonobj, "quiet", json_object_new_boolean(commandlineInput.quiet));
+	json_object_object_add(jsonobj, "silent", json_object_new_boolean(commandlineInput.silent));
+	json_object_object_add(jsonobj, "csenabled", json_object_new_boolean(commandlineInput.csEnabled));
+	json_object_object_add(jsonobj, "apikey", json_object_new_string(commandlineInput.csApiKey));
+	json_object_object_add(jsonobj, "nullsharetimeout", json_object_new_int(commandlineInput.nullShareTimeout));
+
+	std::ofstream configfile(commandlineInput.configfile);
+	configfile << json_object_to_json_string(jsonobj);
+	configfile.close();
 }
 
 

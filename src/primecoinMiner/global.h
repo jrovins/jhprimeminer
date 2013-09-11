@@ -281,15 +281,17 @@ typedef struct
 	uint32 initialPrimorial;
 	uint32 sieveExtensions;
 	uint32 centralServerPort;
-	bool csEnabled;
 	char* centralServer;
 	char* csApiKey;
-	bool printDebug;
 	int64_t csUUID;
-	bool weakSSL;
 	char* configfile;
+	bool printDebug;
 	bool quiet;
 	bool silent;
+	bool csEnabled;
+	bool weakSSL;
+	bool csStaticUUID;
+	uint32 nullShareTimeout;
 }commandlineInput_t;
 
 extern commandlineInput_t commandlineInput;
