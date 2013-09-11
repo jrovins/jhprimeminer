@@ -240,6 +240,7 @@ void csNotifyShare(uint32 shareErrorCode, float shareValue, char* rejectReason){
 
 bool loadConfigJSON(std::string configdata,bool runtime){
 	json_object *jsonobj;
+	bool die = false;
 	jsonobj = json_tokener_parse(configdata.c_str());
 	if(!jsonobj){
 		return false;
@@ -249,7 +250,18 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		if(memcmp(key, "workerpass", 11) == 0){commandlineInput.workerpass = (char *)json_object_get_string(val);}
 		if(memcmp(key, "host", 5) == 0){commandlineInput.host = (char *)json_object_get_string(val);}
 		if(memcmp(key, "port", 5) == 0){commandlineInput.port = json_object_get_int(val);}
-		if(memcmp(key, "numthreads", 11) == 0){commandlineInput.numThreads = json_object_get_int(val);}
+		if(memcmp(key, "numthreads", 11) == 0){
+			int Threads = json_object_get_int(val);
+			if(Threads>0){
+				commandlineInput.numThreads = Threads;
+			}else{
+				commandlineInput.numThreads = std::max(getNumThreads(), 1);
+			}
+			if(runtime){
+				std::cout << "Cannot change number of threads after launch... exiting... It is now the init/check scripts job to restart the miner" << std::endl;
+				die = true;
+			}
+		}
 		if(memcmp(key, "sievesize", 10) == 0){
 			commandlineInput.sieveSize = json_object_get_int(val);
 			if (runtime) nMaxSieveSize = commandlineInput.sieveSize;
@@ -302,6 +314,13 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		
 		
 	}
+
+	saveConfigJSON();
+
+	if(die){
+		exit(0);
+	}
+
 	return true;
 }
 

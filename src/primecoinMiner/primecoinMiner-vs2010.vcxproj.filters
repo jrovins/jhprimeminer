@@ -40,6 +40,9 @@
     <Filter Include="Source Files\libcurl">
       <UniqueIdentifier>{1e0339cf-6a46-4400-b91f-9306b6f6b163}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\json">
+      <UniqueIdentifier>{7bf129e8-96e4-4698-a0a0-87896a9c1968}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bn2.cpp">
