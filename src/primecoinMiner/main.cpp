@@ -32,7 +32,7 @@ char* dt;
 uint64 lastShareSubmit = getTimeMilliseconds(); // Lets pretend something was submitted at start - to not reset too soon!
 bool bEnablenPrimorialMultiplierTuning;
 bool bOptimalL1SearchInProgress;
-BYTE nRoundSievePercentage;
+unsigned int nRoundSievePercentage;
 
 bool error(const char *format, ...)
 {
@@ -1544,7 +1544,7 @@ int main(int argc, char **argv)
 	commandlineInput.roundSievePercentage = 70; // default 
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
-	commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
+	commandlineInput.primorialMultiplier = 0; // for default 0 we will switch auto tune on
 	commandlineInput.targetOverride = 0;
 	commandlineInput.targetBTOverride = 0;
 	commandlineInput.initialPrimorial = 61;
@@ -1584,7 +1584,7 @@ int main(int argc, char **argv)
 	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
 
 	if(commandlineInput.primorialMultiplier == 0){
-		primeStats.nPrimorialMultiplier = 37;
+		primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
 		bEnablenPrimorialMultiplierTuning = true;
 	}else{
 		primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;

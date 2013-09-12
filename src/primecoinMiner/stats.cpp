@@ -283,7 +283,14 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		if(memcmp(key, "cacheelements", 14) == 0){commandlineInput.L1CacheElements = json_object_get_int(val);}
 		if(memcmp(key, "primorialmultiplier", 20) == 0){
 			commandlineInput.primorialMultiplier = json_object_get_int(val);
-			if (runtime) primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
+			if (runtime){
+				if(commandlineInput.primorialMultiplier>0){
+					primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
+					bEnablenPrimorialMultiplierTuning = false;
+				}else{
+					bEnablenPrimorialMultiplierTuning = true;
+				}
+			}
 		}
 		if(memcmp(key, "cachetuning", 12) == 0){
 			commandlineInput.enableCacheTunning = json_object_get_boolean(val);

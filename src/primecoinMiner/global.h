@@ -297,7 +297,7 @@ extern commandlineInput_t commandlineInput;
 extern commandlineInput_t OldCommandlineInput;
 extern bool bEnablenPrimorialMultiplierTuning;
 extern bool bOptimalL1SearchInProgress;
-extern BYTE nRoundSievePercentage;
+extern unsigned int nRoundSievePercentage;
 
 // direct access to share counters
 extern volatile int total_shares;
