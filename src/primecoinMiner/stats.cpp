@@ -35,7 +35,7 @@ void csNotifyStats(){
 				return;
 			}
 			//notify settings too
-			csNotifySettings();
+			csNotifySettings(true);
 		}
 		else{
 			std::cout << "Error parsing json response" << std::endl;
@@ -47,9 +47,12 @@ void csNotifyStats(){
 
 
 
-void csNotifySettings(){
+void csNotifySettings(bool runtime){
 	json_object *jsonobj = json_object_new_object();
 	if(const int64_t uuid = csGetUUID()){
+
+		if(runtime){
+
 		if(OldCommandlineInput.workername != commandlineInput.workername ){
 			json_object_object_add(jsonobj, "workername", json_object_new_string(commandlineInput.workername));
 			OldCommandlineInput.workername = commandlineInput.workername;
@@ -140,10 +143,14 @@ void csNotifySettings(){
 		}
 		//now old settings are updated, and all changes are built into json object
 		//add json object headers:
+
+		json_object_object_add(jsonobj, "blocknum", json_object_new_int(workData.xptClient->blockWorkInfo.height));
+
+		}
+
 		json_object_object_add(jsonobj, "command", json_object_new_string("syncSettings"));
 		json_object_object_add(jsonobj, "key", json_object_new_string(commandlineInput.csApiKey));
 		json_object_object_add(jsonobj, "uuid", json_object_new_int(uuid));
-		json_object_object_add(jsonobj, "blocknum", json_object_new_int(workData.xptClient->blockWorkInfo.height));
 		json_object_object_add(jsonobj, "timestamp", json_object_new_int(time(0)));
 
 		std::string url = commandlineInput.centralServer;
@@ -157,7 +164,7 @@ void csNotifySettings(){
 				return;
 			}
 			if(json_object_get_boolean(json_object_object_get(jsonresponse,"result"))){
-				loadConfigJSON(response.data(),true);
+				loadConfigJSON(response.data(),runtime);
 			}
 		}else{
 			std::cout << "Error parsing json response" << std::endl;
@@ -252,14 +259,12 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		if(memcmp(key, "port", 5) == 0){commandlineInput.port = json_object_get_int(val);}
 		if(memcmp(key, "numthreads", 11) == 0){
 			int Threads = json_object_get_int(val);
-			if(Threads>0){
-				commandlineInput.numThreads = Threads;
-			}else{
-				commandlineInput.numThreads = std::max(getNumThreads(), 1);
-			}
-			if(runtime){
-				std::cout << "Cannot change number of threads after launch... exiting... It is now the init/check scripts job to restart the miner" << std::endl;
-				die = true;
+			if(!runtime){
+				if(Threads>0){
+					commandlineInput.numThreads = Threads;
+				}else{
+					commandlineInput.numThreads = std::max(getNumThreads(), 1);
+				}
 			}
 		}
 		if(memcmp(key, "sievesize", 10) == 0){
@@ -281,8 +286,8 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 			if (runtime) primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
 		}
 		if(memcmp(key, "cachetuning", 12) == 0){
-			commandlineInput.enableCacheTunning = json_object_get_int(val);
-			if (runtime){
+			commandlineInput.enableCacheTunning = json_object_get_boolean(val);
+			if (runtime && commandlineInput.enableCacheTunning){
 				if (!bOptimalL1SearchInProgress){
 					#ifdef _WIN32
 					CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
@@ -316,11 +321,6 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 	}
 
 	saveConfigJSON();
-
-	if(die){
-		exit(0);
-	}
-
 	return true;
 }
 

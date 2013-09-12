@@ -535,7 +535,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
 		if(configfile.is_open()){
 			//load config from file	
 			std::string config(std::istreambuf_iterator<char>(configfile.rdbuf()), std::istreambuf_iterator<char>());
-			if(!loadConfigJSON(config)){
+			if(!loadConfigJSON(config,false)){
 				std::cout << "Failed to parse config file: " << commandlineInput.configfile << std::endl;
 				exit(0);
 			}
@@ -567,12 +567,11 @@ void jhMiner_parseCommandline(int argc, char **argv)
 				commandlineInput.host = fStrDup(strstr(argv[cIdx], "http://")+7);
 			else
 				commandlineInput.host = fStrDup(argv[cIdx]);
-			const char* portStr = strstr(commandlineInput.host, ":");
+			char* portStr = strstr(commandlineInput.host, ":");
 			if( portStr )
 			{
-		//		*portStr = '\0';
-		//		commandlineInput.port = atoi(portStr+1);
-				commandlineInput.port = atoi(portStr);
+				*portStr = '\0';
+				commandlineInput.port = atoi(portStr+1);
 			}
 			cIdx++;
 		}
@@ -1569,6 +1568,10 @@ int main(int argc, char **argv)
 	// parse command lines and config file
 	jhMiner_parseCommandline(argc, argv);
 
+	if(commandlineInput.csEnabled)
+		csNotifySettings(false);
+
+
 	// Sets max sieve size
 	nMaxSieveSize = commandlineInput.sieveSize;
 	nSievePercentage = commandlineInput.sievePercentage;
@@ -1612,7 +1615,7 @@ int main(int argc, char **argv)
 	"|  Credits: tandyuk for the linux build of rdebourbons mod        |" << std::endl <<
 	"|                                                                 |" << std::endl <<
 	"|  Donations (XPM):                                               |" << std::endl <<
-	"|    JH: Not sure.. coming soon....                               |" << std::endl <<
+	"|    JH: AQjz9cAUZfjFgHXd8aTiWaKKbb3LoCVm2J                       |" << std::endl <<
 	"|    rdebourbon: AUwKMCYCacE6Jq1rsLcSEHSNiohHVVSiWv               |" << std::endl <<
 	"|    tandyuk: AYwmNUt6tjZJ1nPPUxNiLCgy1D591RoFn4                  |" << std::endl <<
 	" ============================================================================ " << std::endl <<
@@ -1762,8 +1765,6 @@ int main(int argc, char **argv)
 		Sleep(30*1000);
 	}
 	
-	if(commandlineInput.csEnabled)
-		csNotifySettings();
 
 
 	if(!commandlineInput.silent && !commandlineInput.quiet){
