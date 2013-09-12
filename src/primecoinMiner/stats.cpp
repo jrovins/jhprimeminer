@@ -280,7 +280,10 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 			if(runtime) nRoundSievePercentage = commandlineInput.roundSievePercentage;
 		}
 		if(memcmp(key, "sieveprimelimit", 16) == 0){commandlineInput.sievePrimeLimit = json_object_get_int(val);}
-		if(memcmp(key, "cacheelements", 14) == 0){commandlineInput.L1CacheElements = json_object_get_int(val);}
+		if(memcmp(key, "cacheelements", 14) == 0){
+			commandlineInput.L1CacheElements = json_object_get_int(val);
+			if(runtime)	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
+		}
 		if(memcmp(key, "primorialmultiplier", 20) == 0){
 			commandlineInput.primorialMultiplier = json_object_get_int(val);
 			if (runtime){
@@ -309,13 +312,22 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 			}
 		}
 		if(memcmp(key, "primetuning", 12) == 0){bEnablenPrimorialMultiplierTuning = json_object_get_int(val);}
-		if(memcmp(key, "target", 7) == 0){commandlineInput.targetOverride = json_object_get_int(val);}
-		if(memcmp(key, "bttarget", 9) == 0){commandlineInput.targetBTOverride = json_object_get_int(val);}
+		if(memcmp(key, "target", 7) == 0){
+			commandlineInput.targetOverride = json_object_get_int(val);
+			if(runtime)	nOverrideTargetValue = commandlineInput.targetOverride;
+		}
+		if(memcmp(key, "bttarget", 9) == 0){
+			commandlineInput.targetBTOverride = json_object_get_int(val);
+			if(runtime) nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+		}
 		if(memcmp(key, "initialprimorial", 17) == 0){commandlineInput.initialPrimorial = json_object_get_int(val);}
 		if(memcmp(key, "centralserver", 14) == 0){commandlineInput.centralServer = (char *)json_object_get_string(val);}
 		if(memcmp(key, "centralserverport", 18) == 0){commandlineInput.centralServerPort = json_object_get_int(val);}
 		if(memcmp(key, "apikey", 7) == 0){commandlineInput.csApiKey = (char *)json_object_get_string(val);}
-		if(memcmp(key, "sieveextensions", 16) == 0){commandlineInput.sieveExtensions = json_object_get_int(val);}
+		if(memcmp(key, "sieveextensions", 16) == 0){
+			commandlineInput.sieveExtensions = json_object_get_int(val);
+			if(runtime)	nSieveExtensions = commandlineInput.sieveExtensions;
+		}
 		if(memcmp(key, "weakssl", 8) == 0){commandlineInput.weakSSL = json_object_get_boolean(val);}
 		if(memcmp(key, "quiet", 6) == 0){commandlineInput.quiet = json_object_get_boolean(val);}
 		if(memcmp(key, "silent", 7) == 0){commandlineInput.silent = json_object_get_boolean(val);}
@@ -323,7 +335,9 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		if(memcmp(key, "csstaticuuid", 13) == 0){commandlineInput.csStaticUUID = json_object_get_boolean(val);}
 		if(memcmp(key, "uuid", 5) == 0){commandlineInput.csUUID = json_object_get_int(val);}
 		if(memcmp(key, "nullsharetimeout", 17) == 0){commandlineInput.nullShareTimeout = json_object_get_int(val);}
-		
+	
+
+
 		
 	}
 
