@@ -1303,10 +1303,10 @@ int main(int argc, char **argv)
 
 
 	// Sets max sieve size
-   nMaxSieveSize = ceil(commandlineInput.sieveSize/1024000)*1024000;
+   nMaxSieveSize = ceil(commandlineInput.sieveSize/1048576)*1048576;
    nSieveExtensions = commandlineInput.sieveExtensions;
 
-   commandlineInput.targetBTOverride = ceil(commandlineInput.targetBTOverride/2)*2;
+  // commandlineInput.targetBTOverride = ceil(commandlineInput.targetBTOverride/2)*2;
    vPrimesAvg = ((commandlineInput.targetOverride+commandlineInput.targetBTOverride)/2);
    if (vPrimesAvg!=10) { vPrimesAdj = pow(1.3,((10-vPrimesAvg)*2)); } else { vPrimesAdj = 1; }
    vPrimesMult = 41.0 * (1+(1.0*2 ));

@@ -1333,13 +1333,13 @@ bool CSieveOfEratosthenes::Weave()
                   vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
                }
             }
-            else if (nLayerSeq < nBiTwinCC2Layers)
+            else if (nLayerSeq < nBiTwinCC1Layers)
             {
                for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
                {
                   vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
                   vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
-                  vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
+                  vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord];
                }
             }
             else
@@ -1371,13 +1371,13 @@ bool CSieveOfEratosthenes::Weave()
                      vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
                   }
                }
-               else if (nLayerExtendedSeq < nBiTwinCC2Layers)
+               else if (nLayerExtendedSeq < nBiTwinCC1Layers)
                {
                   for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
                   {
                      vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
                      vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
-                     vfExtTWN[nWord] |= vfCompositeLayerCC2[nWord];
+                     vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord];
                   }
                }
                else
