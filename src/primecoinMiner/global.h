@@ -161,6 +161,7 @@ typedef struct
 	volatile float fBlockShareValue;
 	volatile float fTotalSubmittedShareValue;
 	volatile uint32_t chainCounter[4][13];
+	volatile uint32_t chainTotals[4];	
 	volatile uint32_t nWaveTime;
 	volatile unsigned int nWaveRound;
 	volatile uint32_t nTestTime;
@@ -222,7 +223,7 @@ extern jsonRequestTarget_t jsonRequestTarget; // rpc login data
 
 // prototypes from main.cpp
 bool error(const char *format, ...);
-bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock);
+bool jhMiner_pushShare_primecoin(primecoinBlock_t* primecoinBlock);
 void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 hashOutput[32]);
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
@@ -269,6 +270,7 @@ typedef struct
 	uint32 port;
 	uint32 numThreads;
 	uint32 sieveSize;
+	uint32 maxPrimes;
 	uint32 sievePercentage;
 	uint32 roundSievePercentage;
 	uint32 sievePrimeLimit;	// how many primes should be sieved

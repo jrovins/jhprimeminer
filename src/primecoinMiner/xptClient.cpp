@@ -105,8 +105,6 @@ void xptClient_free(xptClient_t* xptClient)
  */
 void xptClient_sendWorkerLogin(xptClient_t* xptClient)
 {
-	uint32 usernameLength = std::min(127, fStrLen(xptClient->username));
-	uint32 passwordLength = std::min(127, fStrLen(xptClient->password));
 	// build the packet
 	bool sendError = false;
 	xptPacketbuffer_beginWritePacket(xptClient->sendBuffer, XPT_OPC_C_AUTH_REQ);

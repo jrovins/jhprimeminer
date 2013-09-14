@@ -1,5 +1,5 @@
 CXX = g++
-CFLAGS = -mtune=native -O3 -Wall -Wextra -std=c++0x -fomit-frame-pointer
+CFLAGS = -mtune=native -Wall -Wextra -std=c++0x -O3 -fomit-frame-pointer
 
 OSVERSION := $(shell uname -s)
 LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread -lcurl -ljson

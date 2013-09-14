@@ -28,7 +28,7 @@ make
 
 Ubuntu:
 
-apt-get install build-essential libcurl4-openssl-dev libssl-dev openssl git libjson0 libjson0-dev
+apt-get install build-essential libcurl4-openssl-dev libssl-dev openssl git libjson0 libjson0-dev libgmp libgmp-dev
 
 git clone https://github.com/tandyuk/jhPrimeminer.git
 

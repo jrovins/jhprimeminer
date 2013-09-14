@@ -77,14 +77,6 @@ void csNotifySettings(bool runtime){
 			json_object_object_add(jsonobj, "sievesize", json_object_new_int(commandlineInput.sieveSize));
 			OldCommandlineInput.sieveSize = commandlineInput.sieveSize;
 		}
-		if(OldCommandlineInput.sievePercentage != commandlineInput.sievePercentage){
-			json_object_object_add(jsonobj, "sievepercentage", json_object_new_int(commandlineInput.sievePercentage));
-			OldCommandlineInput.sievePercentage = commandlineInput.sievePercentage;
-		}
-		if(OldCommandlineInput.roundSievePercentage != commandlineInput.roundSievePercentage){
-			json_object_object_add(jsonobj, "roundsievepercentage", json_object_new_int(commandlineInput.roundSievePercentage));
-			OldCommandlineInput.roundSievePercentage = commandlineInput.roundSievePercentage;
-		}
 		if(OldCommandlineInput.sievePrimeLimit != commandlineInput.sievePrimeLimit){
 			json_object_object_add(jsonobj, "sieveprimelimit", json_object_new_int(commandlineInput.sievePrimeLimit));
 			OldCommandlineInput.sievePrimeLimit = commandlineInput.sievePrimeLimit;
@@ -230,7 +222,7 @@ void csNotifyShare(uint32 shareErrorCode, float shareValue, char* rejectReason){
 		std::string response = curl_request(url,request,true);
 
 		json_object *jsonresponse;
-		if(	jsonresponse = json_tokener_parse(response.data())){
+		if((jsonresponse = json_tokener_parse(response.data()))){
 			if(json_object_get_boolean(json_object_object_get(jsonresponse,"error"))){
 				std::cout << "Error from json: " << json_object_get_string(json_object_object_get(jsonresponse,"errormessage")) << std::endl;
 				return;
@@ -247,7 +239,6 @@ void csNotifyShare(uint32 shareErrorCode, float shareValue, char* rejectReason){
 
 bool loadConfigJSON(std::string configdata,bool runtime){
 	json_object *jsonobj;
-	bool die = false;
 	jsonobj = json_tokener_parse(configdata.c_str());
 	if(!jsonobj){
 		return false;
@@ -271,10 +262,6 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 			commandlineInput.sieveSize = json_object_get_int(val);
 			if (runtime) nMaxSieveSize = commandlineInput.sieveSize;
 		}
-		if(memcmp(key, "sievepercentage", 16) == 0){
-			commandlineInput.sievePercentage = json_object_get_int(val);
-			if(runtime) nSievePercentage = commandlineInput.sievePercentage;
-		}
 		if(memcmp(key, "roundsievepercentage", 21) == 0){
 			commandlineInput.roundSievePercentage = json_object_get_int(val);
 			if(runtime) nRoundSievePercentage = commandlineInput.roundSievePercentage;
@@ -286,39 +273,21 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 		}
 		if(memcmp(key, "primorialmultiplier", 20) == 0){
 			commandlineInput.primorialMultiplier = json_object_get_int(val);
-			if (runtime){
-				if(commandlineInput.primorialMultiplier>0){
-					primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
-					bEnablenPrimorialMultiplierTuning = false;
-				}else{
-					bEnablenPrimorialMultiplierTuning = true;
-				}
-			}
+			if (runtime) primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
 		}
-		if(memcmp(key, "cachetuning", 12) == 0){
-			commandlineInput.enableCacheTunning = json_object_get_boolean(val);
-			if (runtime && commandlineInput.enableCacheTunning){
-				if (!bOptimalL1SearchInProgress){
-					#ifdef _WIN32
-					CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
-					#else
-					uint32_t totalThreads = commandlineInput.numThreads + 2;
-					pthread_t threads[totalThreads];
-					const bool enabled = commandlineInput.enableCacheTunning;
-					pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&enabled);
-					#endif
-					std::cout << "Auto tunning for L1CacheElements size was started" << std::endl;
-				}
-			}
-		}
-		if(memcmp(key, "primetuning", 12) == 0){bEnablenPrimorialMultiplierTuning = json_object_get_int(val);}
 		if(memcmp(key, "target", 7) == 0){
-			commandlineInput.targetOverride = json_object_get_int(val);
+			int value = json_object_get_int(val);
+			if(value > 0){
+			commandlineInput.targetOverride = value;
 			if(runtime)	nOverrideTargetValue = commandlineInput.targetOverride;
+			}
 		}
 		if(memcmp(key, "bttarget", 9) == 0){
-			commandlineInput.targetBTOverride = json_object_get_int(val);
+			int value = json_object_get_int(val);
+			if(value > 0){
+			commandlineInput.targetBTOverride = value;
 			if(runtime) nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+			}
 		}
 		if(memcmp(key, "initialprimorial", 17) == 0){commandlineInput.initialPrimorial = json_object_get_int(val);}
 		if(memcmp(key, "centralserver", 14) == 0){commandlineInput.centralServer = (char *)json_object_get_string(val);}
@@ -360,8 +329,6 @@ bool saveConfigJSON(){
 	json_object_object_add(jsonobj, "port", json_object_new_int(commandlineInput.port));
 	json_object_object_add(jsonobj, "numthreads", json_object_new_int(commandlineInput.numThreads));
 	json_object_object_add(jsonobj, "sievesize", json_object_new_int(commandlineInput.sieveSize));
-	json_object_object_add(jsonobj, "sievepercentage", json_object_new_int(commandlineInput.sievePercentage));
-	json_object_object_add(jsonobj, "roundsievepercentage", json_object_new_int(commandlineInput.roundSievePercentage));
 	json_object_object_add(jsonobj, "sieveprimelimit", json_object_new_int(commandlineInput.sievePrimeLimit));
 	json_object_object_add(jsonobj, "cacheelements", json_object_new_int(commandlineInput.L1CacheElements));
 	json_object_object_add(jsonobj, "primorialmultiplier", json_object_new_int(commandlineInput.primorialMultiplier));

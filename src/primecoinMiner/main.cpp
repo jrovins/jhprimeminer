@@ -23,16 +23,20 @@ commandlineInput_t OldCommandlineInput = {0};
 volatile int total_shares = 0;
 volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
-unsigned int nSievePercentage;
+unsigned int vPrimesSize;
+float vPrimesMult = 184.5;
+float vPrimesAvg = 8;
+float vPrimesAdj = 1;
+unsigned int nMaxPrimes;
 bool nPrintDebugMessages;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 unsigned int nTarget;
 char* dt;
 uint64 lastShareSubmit = getTimeMilliseconds(); // Lets pretend something was submitted at start - to not reset too soon!
-bool bEnablenPrimorialMultiplierTuning;
-bool bOptimalL1SearchInProgress;
 unsigned int nRoundSievePercentage;
+
+char* minerVersionString = "jhPrimeminer X1 (AeroCloud)";
 
 bool error(const char *format, ...)
 {
@@ -189,7 +193,7 @@ workData_t workData;
  * Returns true on success
  * Note that the primecoin data can be larger due to the multiplier at the end, so we use 256 bytes per default
  */
-bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock)
+bool jhMiner_pushShare_primecoin(primecoinBlock_t* primecoinBlock)
 {
 	// printf("Queue share\n");
 		xptShareToSubmit_t* xptShareToSubmit = (xptShareToSubmit_t*)malloc(sizeof(xptShareToSubmit_t));
@@ -318,75 +322,6 @@ sysctl(mib, 2, &numcpu, &len, NULL, 0);
 }
 
 
-/*
-void jhMiner_queryWork_primecoin()
-{
-	sint32 rpcErrorCode = 0;
-	//uint32 time1 = GetTickCount();
-	jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getwork", NULL, &rpcErrorCode);
-	//uint32 time2 = GetTickCount() - time1;
-	// printf("request time: %dms\n", time2);
-	if( jsonReturnValue == NULL )
-	{
-		//printf("Getwork() failed with %serror code %d\n", (rpcErrorCode>1000)?"http ":"", rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode);
-		std::cout << "Getwork() failed with " << ((rpcErrorCode>1000)?"http ":"") << "error code " << (rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode) << std::endl;
-		workData.workEntry[0].dataIsValid = false;
-		return;
-	}
-	else
-	{
-		jsonObject_t* jsonResult = jsonObject_getParameter(jsonReturnValue, "result");
-		jsonObject_t* jsonResult_data = jsonObject_getParameter(jsonResult, "data");
-		//jsonObject_t* jsonResult_hash1 = jsonObject_getParameter(jsonResult, "hash1");
-//		jsonObject_t* jsonResult_target = jsonObject_getParameter(jsonResult, "target");   unused?
-		jsonObject_t* jsonResult_serverData = jsonObject_getParameter(jsonResult, "serverData");
-		//jsonObject_t* jsonResult_algorithm = jsonObject_getParameter(jsonResult, "algorithm");
-		if( jsonResult_data == NULL )
-		{
-			//printf("Error :(\n");
-			std::cout << "Error :(" << std::endl;
-			workData.workEntry[0].dataIsValid = false;
-			jsonObject_freeObject(jsonReturnValue);
-			return;
-		}
-		// data
-		uint32 stringData_length = 0;
-		uint8* stringData_data = jsonObject_getStringData(jsonResult_data, &stringData_length);
-		//printf("data: %.*s...\n", (sint32)min(48, stringData_length), stringData_data);
-#ifdef _WIN32
-		EnterCriticalSection(&workData.cs);
-#else
-    pthread_mutex_lock(&workData.cs);
-#endif
-		yPoolWorkMgr_parseHexString((char*)stringData_data, std::min<unsigned long>(128*2, stringData_length), workData.workEntry[0].data);
-		workData.workEntry[0].dataIsValid = true;
-		// get server data
-		uint32 stringServerData_length = 0;
-		uint8* stringServerData_data = jsonObject_getStringData(jsonResult_serverData, &stringServerData_length);
-		memset(workData.workEntry[0].serverData, 0, 32);
-		if( jsonResult_serverData )
-			yPoolWorkMgr_parseHexString((char*)stringServerData_data, std::min(128*2, 32*2), workData.workEntry[0].serverData);
-		// generate work hash
-		uint32 workDataHash = 0x5B7C8AF4;
-		for(uint32 i=0; i<stringData_length/2; i++)
-		{
-			workDataHash = (workDataHash>>29)|(workDataHash<<3);
-			workDataHash += (uint32)workData.workEntry[0].data[i];
-		}
-		workData.workEntry[0].dataHash = workDataHash;
-#ifdef _WIN32
-		LeaveCriticalSection(&workData.cs);
-#else
-    pthread_mutex_unlock(&workData.cs);
-#endif
-		jsonObject_freeObject(jsonReturnValue);
-	}
-}
-*/
-
-/*
- * Returns the block height of the most recently received workload
- */
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 {
 	return ((serverData_t*)workData.workEntry[threadIndex].serverData)->blockHeight;
@@ -630,11 +565,8 @@ void jhMiner_parseCommandline(int argc, char **argv)
 				exit(0);
 			}
 			commandlineInput.sieveSize = atoi(argv[cIdx]);
-			if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 40000000 )
-			{
-				cout << "-s parameter out of range, must be between 200000 - 10000000" << endl;
-				exit(0);
-			}
+         if(commandlineInput.sieveSize < 1024000) { commandlineInput.sieveSize=1024000; }
+		 if(commandlineInput.sieveSize > 10240000) { commandlineInput.sieveSize=10240000; }
 			cIdx++;
 		}
 		else if( memcmp(argument, "-d", 3)==0 )
@@ -739,11 +671,8 @@ void jhMiner_parseCommandline(int argc, char **argv)
             exit(0);
          }
          commandlineInput.targetOverride = atoi(argv[cIdx]);
-         if( commandlineInput.targetOverride < 1 || commandlineInput.targetOverride > 100 )
-         {
-            cout << "-target parameter out of range, must be between 1 - 100" << endl;
-            exit(0);
-         }
+         if(commandlineInput.targetOverride < 8) { commandlineInput.targetOverride = 8; }
+		 if(commandlineInput.targetOverride > 100) { commandlineInput.targetOverride = 100; }
          cIdx++;
       }
       else if( memcmp(argument, "-bttarget", 10)==0 )
@@ -755,11 +684,8 @@ void jhMiner_parseCommandline(int argc, char **argv)
             exit(0);
          }
          commandlineInput.targetBTOverride = atoi(argv[cIdx]);
-         if( commandlineInput.targetBTOverride < 1 || commandlineInput.targetBTOverride > 100 )
-         {
-            cout << "-bttarget parameter out of range, must be between 1 - 100" << endl;
-            exit(0);
-         }
+		 if(commandlineInput.targetBTOverride < 8) { commandlineInput.targetBTOverride = 8; }
+		 if(commandlineInput.targetBTOverride > 100) { commandlineInput.targetBTOverride = 100; }
          cIdx++;
       }
       else if( memcmp(argument, "-primorial", 11)==0 )
@@ -958,8 +884,7 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 static void *watchdog_thread(void *)
 #endif
 {
-	if(commandlineInput.nullShareTimeout>0){
-		uint32 maxTimeBetweenShareSubmit = commandlineInput.nullShareTimeout * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
+	uint32 maxTimeBetweenShareSubmit = commandlineInput.nullShareTimeout * 60 * 1000;		// Nice if it was a cmd line option, so it can be ajusted!
 #ifdef _WIN32
 	   	uint32 maxIdelTime = 10 * 1000;
 		std::map <DWORD, HANDLE> :: const_iterator thMap_Iter;
@@ -1009,173 +934,7 @@ static void *watchdog_thread(void *)
 #endif
 				Sleep( 10*1000);
 			}
-		}
 	}
-}
-
-
-bool fIncrementPrimorial = true;
-
-#ifdef _WIN32
-static void CacheAutoTuningWorkerThread(bool bEnabled)
-#else
-void *CacheAutoTuningWorkerThread(void * arg)
-#endif
-{
-#ifndef _WIN32
-  bool bEnabled = static_cast<bool>((uintptr_t)arg);
-#endif
-
-#ifdef _WIN32
-  if (bOptimalL1SearchInProgress)
-		return 0;
-#endif
-
-	bOptimalL1SearchInProgress = true;
-	
-//	uint64_t startTime = getTimeMilliseconds();	
-	unsigned int nL1CacheElementsStart = 8 * sizeof(unsigned long) * 1000;
-	unsigned int nL1CacheElementsMax   = 2000000;
-	unsigned int nL1CacheElementsIncrement = 8 * sizeof(unsigned long) * 1000;
-	BYTE nSampleSeconds = 10;
-
-	unsigned int nL1CacheElements = primeStats.nL1CacheElements;
-	std::map <unsigned int, unsigned int> mL1Stat;
-	std::map <unsigned int, unsigned int>::iterator mL1StatIter;
-	typedef std::pair <unsigned int, unsigned int> KeyVal;
-	if (bEnabled)
-	primeStats.nL1CacheElements = nL1CacheElementsStart;
-	
-	long nCounter = 0;
-	while (true && bEnabled && (xptClient_isDisconnected(workData.xptClient, NULL) == false))
-	{		
-		primeStats.nWaveTime = 0;
-		primeStats.nWaveRound = 0;
-		primeStats.nTestTime = 0;
-		primeStats.nTestRound = 0;
-		Sleep(nSampleSeconds*1000);
-	//	uint32_t waveTime = primeStats.nWaveTime;
-		nCounter ++;
-		if (nCounter <=1) 
-			continue;// wait a litle at the beginning
-		if ( !xptClient_isDisconnected(workData.xptClient, NULL) ){
-			bOptimalL1SearchInProgress = false;
-			primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
-			return 0;
-		}
-
-		if (bOptimalL1SearchInProgress && nCounter >=1)
-		{
-		nL1CacheElements = primeStats.nL1CacheElements;
-		mL1Stat.insert( KeyVal((uint32_t)primeStats.nL1CacheElements, (uint32_t)(primeStats.nWaveRound == 0 ? 0xFFFF : primeStats.nWaveTime / primeStats.nWaveRound)));
-		if (nL1CacheElements < nL1CacheElementsMax)
-			primeStats.nL1CacheElements += nL1CacheElementsIncrement;
-		else
-		{
-			// set the best value
-			DWORD minWeveTime = mL1Stat.begin()->second;
-			unsigned int nOptimalSize = nL1CacheElementsStart;
-			for (  mL1StatIter = mL1Stat.begin(); mL1StatIter != mL1Stat.end(); mL1StatIter++ )
-			{
-				if (mL1StatIter->second < minWeveTime)
-				{
-					minWeveTime = mL1StatIter->second;
-					nOptimalSize = mL1StatIter->first;
-				}
-			}
-			if(!commandlineInput.silent && !commandlineInput.quiet){
-				printf("The optimal L1CacheElement size is: %u\n", nOptimalSize);
-			}
-			primeStats.nL1CacheElements = nOptimalSize;
-			nL1CacheElements = nOptimalSize;
-			bOptimalL1SearchInProgress = false;
-			break;
-		}			
-		if(!commandlineInput.silent && !commandlineInput.quiet){
-			std::cout << "Auto Tuning in progress: " << (((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart)) << "%" << std::endl;
-		}
-	}
-				
-		float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
-		if(!commandlineInput.silent && !commandlineInput.quiet){
-			printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
-			primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
-			primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
-		}
-		if (bEnabled)
-			nCounter ++;
-	}
-}
-
-
-#ifdef _WIN32
-int RoundSieveAutoTuningWorkerThread(void)
-#else
-void *RoundSieveAutoTuningWorkerThread(void *)
-#endif
-{
-		// Auto Tuning for nPrimorialMultiplier
-		int nSampleSeconds = 3;
-
-		while (true && !xptClient_isDisconnected(workData.xptClient, NULL))
-		{
-			if (!bOptimalL1SearchInProgress && bEnablenPrimorialMultiplierTuning){
-			primeStats.nWaveTime = 0;
-			primeStats.nWaveRound = 0;
-			primeStats.nTestTime = 0;
-			primeStats.nTestRound = 0;
-			Sleep(nSampleSeconds*1000);
-			float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
-			//printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-			//printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
-			//	primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
-			//	primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
-			//printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
-			//printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-
-			if (!bEnablenPrimorialMultiplierTuning)
-				continue; // Auto Tuning is disabled
-
-			if ( !xptClient_isDisconnected(workData.xptClient, NULL) ){
-				bEnablenPrimorialMultiplierTuning = false;
-				return 0;
-			}
-
-			if (ratio > nRoundSievePercentage + 5)
-			{
-      // explicit cast to ref removes g++ warning but might be dumb, dunno
-				if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
-					if(!commandlineInput.silent){
-						error("PrimecoinMiner() : primorial increment overflow - resetting");
-					}
-					primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
-				if(!commandlineInput.silent && !commandlineInput.quiet){
-					std::cout << "\nSieve/Test ratio:" << ratio << " / " << (100.0 - ratio) << "%  - New PrimorialMultiplier: " << primeStats.nPrimorialMultiplier << std::endl;
-				}
-			}
-			else
-			{
-				if (ratio < nRoundSievePercentage - 5)
-				{
-					//fix 0/100% bug lack of error message...
-					if ( primeStats.nPrimorialMultiplier >= 2)
-					{
-						if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier)){
-							//@todo: fix (bandaid) 0/100% bug?
-							if(!commandlineInput.silent){
-								error("PrimecoinMiner() : primorial decrement overflow - resetting");
-							}
-							primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
-						}
-					}
-					if(!commandlineInput.silent && !commandlineInput.quiet){
-						std::cout << "\nSieve/Test ratio: " << ratio << " / " << (100 - ratio) << " %  - New PrimorialMultiplier: " << primeStats.nPrimorialMultiplier << std::endl;
-					}
-				}
-			}
-		}
-	}
-		return 0;
 }
 
 void PrintCurrentSettings()
@@ -1197,8 +956,6 @@ if(commandlineInput.csEnabled)
 	cout << "Central Server (-cs): " << commandlineInput.centralServer << endl;
 	cout << "Number of mining threads (-t): " << commandlineInput.numThreads << endl;
 	cout << "Sieve Size (-s): " << nMaxSieveSize << endl;
-	cout << "Sieve Percentage (-d): " << nSievePercentage << endl;
-	cout << "Round Sieve Percentage (-r): " << nRoundSievePercentage << endl;
 	cout << "Prime Limit (-primes): " << commandlineInput.sievePrimeLimit << endl;
 	cout << "Primorial Multiplier (-m): " << primeStats.nPrimorialMultiplier << endl;
 	cout << "L1CacheElements (-c): " << primeStats.nL1CacheElements << endl;
@@ -1210,7 +967,7 @@ if(commandlineInput.csEnabled)
 	cout << "--------------------------------------------------------------------------------" << endl;
 }
 
-
+bool appQuitSignal = false;
 
 #ifdef _WIN32
 static void input_thread(){
@@ -1239,6 +996,8 @@ static struct termios oldt, newt;
 		int input = getchar();
 		switch (input) {
 		case 'q': case 'Q': case 3: //case 27:
+			appQuitSignal = true;
+			Sleep(3200);
 			std::exit(0);
 #ifdef _WIN32
 			return;
@@ -1260,46 +1019,18 @@ static struct termios oldt, newt;
 				error("PrimecoinMiner() : primorial increment overflow");
 			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << std::endl;
 			break;
-		case 'p': case 'P':
-			bEnablenPrimorialMultiplierTuning = !bEnablenPrimorialMultiplierTuning;
-			std::cout << "Primorial Multiplier Auto Tuning was " << (bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled") << std::endl;
-			break;
-		case 'c': case 'C':
-			if (!bOptimalL1SearchInProgress)
-			{
-#ifdef _WIN32
-				CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)true, 0, 0);
-#else
-				uint32_t totalThreads = commandlineInput.numThreads + 2;
-				pthread_t threads[totalThreads];
-				const bool enabled = true;
-				pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&enabled);
-#endif
-				std::cout << "Auto tunning for L1CacheElements size was started" << std::endl;
-			}
-			break;
 		case 's': case 'S':			
 			PrintCurrentSettings();
 			break;
 		case 'u': case 'U':
-			if (!bOptimalL1SearchInProgress && nMaxSieveSize < 10000000)
+			if (nMaxSieveSize < 10000000)
 				nMaxSieveSize += 100000;
 			std::cout << "Sieve size: " << nMaxSieveSize << std::endl;
 			break;
 		case 'j': case 'J':
-			if (!bOptimalL1SearchInProgress && nMaxSieveSize > 100000)
+			if (nMaxSieveSize > 100000)
 				nMaxSieveSize -= 100000;
 			std::cout << "Sieve size: " << nMaxSieveSize << std::endl;
-			break;
-		case 'r': case 'R':
-			if (!bOptimalL1SearchInProgress && nSievePercentage < 100)
-				nSievePercentage ++;
-			std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
-			break;
-		case 'f': case 'F':
-			if (!bOptimalL1SearchInProgress && nSievePercentage > 3)
-				nSievePercentage --;
-			std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
 			break;
 		case 't': case 'T':
 			if( nRoundSievePercentage < 98)
@@ -1340,10 +1071,6 @@ int jhMiner_main_xptMode()
 {
 	#ifdef _WIN32
 	// start the Auto Tuning thread
-  if( commandlineInput.enableCacheTunning ){
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
-  }
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)RoundSieveAutoTuningWorkerThread, NULL, 0, 0);
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
 
 
@@ -1360,16 +1087,21 @@ int jhMiner_main_xptMode()
  CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watchdog_thread, (LPVOID)&threadMap, 0, 0);
 
 #else
- uint32_t totalThreads = commandlineInput.numThreads + 3;
+	uint32_t totalThreads = commandlineInput.numThreads;
+		if(commandlineInput.nullShareTimeout>0){
+			totalThreads = commandlineInput.numThreads + 2;
+		}else{
+			totalThreads = commandlineInput.numThreads + 1;
+		}
+
   pthread_t threads[totalThreads];
   // start the Auto Tuning thread
-  if( commandlineInput.enableCacheTunning ){
-  pthread_create(&threads[commandlineInput.numThreads+1], NULL, CacheAutoTuningWorkerThread, (void *)&commandlineInput.enableCacheTunning);
-  }
-  pthread_create(&threads[commandlineInput.numThreads+2], NULL, RoundSieveAutoTuningWorkerThread, NULL);
+  
   pthread_create(&threads[commandlineInput.numThreads], NULL, input_thread, NULL);
-  pthread_create(&threads[commandlineInput.numThreads+3], NULL, watchdog_thread, NULL);
-  pthread_attr_t threadAttr;
+if(commandlineInput.nullShareTimeout>0){
+	pthread_create(&threads[commandlineInput.numThreads+1], NULL, watchdog_thread, NULL);
+}
+	pthread_attr_t threadAttr;
   pthread_attr_init(&threadAttr);
   // Set the stack size of the thread
   pthread_attr_setstacksize(&threadAttr, 120*1024);
@@ -1391,6 +1123,8 @@ int jhMiner_main_xptMode()
    //unsigned long lastFourChainCount = 0;
 	while( true )
 	{
+		if (appQuitSignal)
+         return 0;
 		// calculate stats every second tick
 		if( loopCounter&1 )
 		{
@@ -1417,10 +1151,6 @@ int jhMiner_main_xptMode()
 				primeStats.bestPrimeChainDifficultySinceLaunch = std::max<double>((double)primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
 				//double sharesPerHour = ((double)valid_shares / totalRunTime) * 3600000.0;
 				float shareValuePerHour = primeStats.fShareValue / totalRunTime * 3600000.0;
-            //float fiveSharePerPeriod = ((double)(primeStats.chainCounter[0][5] - lastFiveChainCount) / statsPassedTime) * 3600000.0;
-            //float fourSharePerPeriod = ((double)(primeStats.chainCounter[0][4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
-            //lastFiveChainCount = primeStats.chainCounter[0][5];
-            //lastFourChainCount = primeStats.chainCounter[0][4];
      		if(!commandlineInput.silent && !commandlineInput.quiet){
 				std::cout << "Val/h: " << shareValuePerHour << " - PPS: " << (sint32)primesPerSecond << " - SPS: " << sievesPerSecond << " - ACC: " << (sint32)avgCandidatesPerRound << std::endl;
 				std::cout << " Chain/Hr:  ";
@@ -1536,7 +1266,6 @@ int jhMiner_main_xptMode()
 int main(int argc, char **argv)
 {
 	// setup some default values
-	bOptimalL1SearchInProgress = false;
 	commandlineInput.port = 10034;
 	commandlineInput.numThreads = std::max(getNumThreads(), 1);
 	commandlineInput.sieveSize = 1000000; // default maxSieveSize
@@ -1545,14 +1274,15 @@ int main(int argc, char **argv)
 	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will switch auto tune on
-	commandlineInput.targetOverride = 0;
-	commandlineInput.targetBTOverride = 0;
-	commandlineInput.initialPrimorial = 61;
+	commandlineInput.targetOverride = 9;
+	commandlineInput.targetBTOverride = 10;
+    commandlineInput.initialPrimorial = 41;
 	commandlineInput.printDebug = 0;
 	commandlineInput.centralServer = "xpm.tandyuk.com";
 	commandlineInput.centralServerPort = 80;
 	commandlineInput.csEnabled = false;
 	commandlineInput.sieveExtensions = 7;
+	commandlineInput.maxPrimes = 16400;
 	commandlineInput.weakSSL = false;
 	commandlineInput.csUUID = NULL;
 	commandlineInput.sievePrimeLimit = 0;
@@ -1573,23 +1303,22 @@ int main(int argc, char **argv)
 
 
 	// Sets max sieve size
-	nMaxSieveSize = commandlineInput.sieveSize;
-	nSievePercentage = commandlineInput.sievePercentage;
-	nRoundSievePercentage = commandlineInput.roundSievePercentage;
+   nMaxSieveSize = ceil(commandlineInput.sieveSize/1024000)*1024000;
+   nSieveExtensions = commandlineInput.sieveExtensions;
+
+   commandlineInput.targetBTOverride = ceil(commandlineInput.targetBTOverride/2)*2;
+   vPrimesAvg = ((commandlineInput.targetOverride+commandlineInput.targetBTOverride)/2);
+   if (vPrimesAvg!=10) { vPrimesAdj = pow(1.3,((10-vPrimesAvg)*2)); } else { vPrimesAdj = 1; }
+   vPrimesMult = 41.0 * (1+(1.0*2 ));
+   nMaxPrimes = vPrimesMult * commandlineInput.initialPrimorial * vPrimesAdj;
 	nOverrideTargetValue = commandlineInput.targetOverride;
 	nOverrideBTTargetValue = commandlineInput.targetBTOverride;
-	nSieveExtensions = commandlineInput.sieveExtensions;
+
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
 		commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
 	primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
 
-	if(commandlineInput.primorialMultiplier == 0){
-		primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
-		bEnablenPrimorialMultiplierTuning = true;
-	}else{
-		primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
-		bEnablenPrimorialMultiplierTuning = false;
-	}
+
 
 	if( commandlineInput.host == NULL){
 		if( commandlineInput.csApiKey == NULL){
@@ -1631,9 +1360,6 @@ int main(int argc, char **argv)
 		pctx = BN_CTX_new();
 	// init prime table
 	GeneratePrimeTable(commandlineInput.sievePrimeLimit);
-	if(!commandlineInput.silent && !commandlineInput.quiet){	
-		std::cout << "Sieve Percentage: " << nSievePercentage << "%" << std::endl;
-	}
 	// init winsock
 #ifdef WIN32
 	WSADATA wsa;
