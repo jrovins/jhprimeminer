@@ -262,6 +262,8 @@ void *CacheAutoTuningWorkerThread(void * arg);
 
 void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex);
 
+
+
 typedef struct
 {
 	char* workername;

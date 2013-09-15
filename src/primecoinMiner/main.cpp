@@ -38,6 +38,8 @@ unsigned int nRoundSievePercentage;
 
 char* minerVersionString = "jhPrimeminer X1 (AeroCloud)";
 
+
+
 bool error(const char *format, ...)
 {
 	puts(format);
@@ -1011,13 +1013,17 @@ static struct termios oldt, newt;
 			// explicit cast to ref removes g++ warning but might be dumb, dunno
 			if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier))
 				error("PrimecoinMiner() : primorial decrement overflow");	
-			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << std::endl;
+			vPrimesMult = primeStats.nPrimorialMultiplier * (1+(1.0*nSieveExtensions/2));
+			nMaxPrimes = vPrimesMult * primeStats.nPrimorialMultiplier * vPrimesAdj;
+			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << " Max Primes: " << nMaxPrimes << std::endl;
 			break;
 		case 'y': case 'Y':
 			// explicit cast to ref removes g++ warning but might be dumb, dunno
 			if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
 				error("PrimecoinMiner() : primorial increment overflow");
-			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << std::endl;
+			vPrimesMult = primeStats.nPrimorialMultiplier * (1+(1.0*nSieveExtensions/2));
+			nMaxPrimes = vPrimesMult * primeStats.nPrimorialMultiplier * vPrimesAdj;
+			std::cout << "Primorial Multiplier: " << primeStats.nPrimorialMultiplier << " Max Primes: " << nMaxPrimes << std::endl;
 			break;
 		case 's': case 'S':			
 			PrintCurrentSettings();
@@ -1061,6 +1067,8 @@ static struct termios oldt, newt;
     return 0;
 #endif
 }
+
+
 
 
 
@@ -1152,7 +1160,7 @@ if(commandlineInput.nullShareTimeout>0){
 				//double sharesPerHour = ((double)valid_shares / totalRunTime) * 3600000.0;
 				float shareValuePerHour = primeStats.fShareValue / totalRunTime * 3600000.0;
      		if(!commandlineInput.silent && !commandlineInput.quiet){
-				std::cout << "Val/h: " << shareValuePerHour << " - PPS: " << (sint32)primesPerSecond << " - SPS: " << sievesPerSecond << " - ACC: " << (sint32)avgCandidatesPerRound << std::endl;
+				std::cout << "Val/h: " << shareValuePerHour << " - PPS: " << (sint32)primesPerSecond << " - SPS: " << sievesPerSecond << " - ACC: " << (sint32)avgCandidatesPerRound  << " - Primes: " << nMaxPrimes <<  " - Primorial: " << primeStats.nPrimorialMultiplier << " - vPrimesAdj: " << vPrimesAdj << " - vPrimesMult: " << vPrimesMult << std::endl;
 				std::cout << " Chain/Hr:  ";
 				for(int i=6; i<=std::max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++){
 	            		   std::cout << i << ": " <<  std::setprecision(2) << (((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0) << " ";
@@ -1269,9 +1277,7 @@ int main(int argc, char **argv)
 	commandlineInput.port = 10034;
 	commandlineInput.numThreads = std::max(getNumThreads(), 1);
 	commandlineInput.sieveSize = 1000000; // default maxSieveSize
-	commandlineInput.sievePercentage = 10; // default 
 	commandlineInput.roundSievePercentage = 70; // default 
-	commandlineInput.enableCacheTunning = false;
 	commandlineInput.L1CacheElements = 256000;
 	commandlineInput.primorialMultiplier = 0; // for default 0 we will switch auto tune on
 	commandlineInput.targetOverride = 9;
@@ -1307,11 +1313,12 @@ int main(int argc, char **argv)
    nSieveExtensions = commandlineInput.sieveExtensions;
 
   // commandlineInput.targetBTOverride = ceil(commandlineInput.targetBTOverride/2)*2;
-   vPrimesAvg = ((commandlineInput.targetOverride+commandlineInput.targetBTOverride)/2);
-   if (vPrimesAvg!=10) { vPrimesAdj = pow(1.3,((10-vPrimesAvg)*2)); } else { vPrimesAdj = 1; }
-   vPrimesMult = 41.0 * (1+(1.0*2 ));
-   nMaxPrimes = vPrimesMult * commandlineInput.initialPrimorial * vPrimesAdj;
-	nOverrideTargetValue = commandlineInput.targetOverride;
+	vPrimesAvg = ((commandlineInput.targetOverride+commandlineInput.targetBTOverride)/2);
+if (vPrimesAvg!=10) { vPrimesAdj = pow(1.3,((10-vPrimesAvg)*2)); } else { vPrimesAdj = 1; }
+vPrimesMult = commandlineInput.primorialMultiplier * (1+(1.0*commandlineInput.sieveExtensions/2));
+nMaxPrimes = vPrimesMult * commandlineInput.primorialMultiplier * vPrimesAdj;
+   
+   nOverrideTargetValue = commandlineInput.targetOverride;
 	nOverrideBTTargetValue = commandlineInput.targetBTOverride;
 
 	if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
@@ -1503,11 +1510,8 @@ int main(int argc, char **argv)
 		"   <H> - Decrement Primorial Multiplier" << std::endl <<
 		"   <U> - Increment Sieve size" << std::endl <<
 		"   <J> - Decrement Sive size" << std::endl <<
-		"   <R> - Increment Sieve Percentage" << std::endl <<
-		"   <F> - Decrement Sieve Percentage" << std::endl <<
 		"   <T> - Increment Round Sieve Percentage" << std::endl <<
 		"   <G> - Decrement Round Sieve Percentage" << std::endl <<
-		"   <P> - Enable/Disable Round Sieve Percentage Auto Tuning" << std::endl <<
 		"   <S> - Print current settings" << std::endl <<
 		"   <W> - Write current settings to config file" << std::endl;
 		if( commandlineInput.enableCacheTunning ){

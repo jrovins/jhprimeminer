@@ -311,6 +311,17 @@ bool loadConfigJSON(std::string configdata,bool runtime){
 	}
 
 	saveConfigJSON();
+	float vPrimesMult = primeStats.nPrimorialMultiplier * 4.5;
+float vPrimesAvg = 8;
+float vPrimesAdj = 1;
+
+	vPrimesAvg = ((commandlineInput.targetOverride+commandlineInput.targetBTOverride)/2);
+if (vPrimesAvg!=10) { vPrimesAdj = pow(1.3,((10-vPrimesAvg)*2)); } else { vPrimesAdj = 1; }
+vPrimesMult = commandlineInput.primorialMultiplier * (1+(1.0*commandlineInput.sieveExtensions/2));
+nMaxPrimes = vPrimesMult * commandlineInput.primorialMultiplier * vPrimesAdj;
+
+
+
 	return true;
 }
 
