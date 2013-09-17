@@ -193,9 +193,9 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	// send header and data
 	uint64 startTime = getTimeMilliseconds();
 	send(serverSocket, fStr_get(fStr_headerData), fStr_len(fStr_headerData), 0);
-	std::cout << "Headers: " << fStr_get(fStr_headerData) << std::endl;
+//	std::cout << "Headers: " << fStr_get(fStr_headerData) << std::endl;
 	send(serverSocket, fStr_get(fStr_jsonRequestData), fStr_len(fStr_jsonRequestData), 0);
-	std::cout << "Request: " << fStr_get(fStr_jsonRequestData) << std::endl;
+//	std::cout << "Request: " << fStr_get(fStr_jsonRequestData) << std::endl;
 	// receive header and request data
 	uint8* recvBuffer = (uint8*)fStr_get(fStr_jsonRequestData);
 	uint32 recvLimit = fStr_getLimit(fStr_jsonRequestData);
