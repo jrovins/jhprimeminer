@@ -193,7 +193,9 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	// send header and data
 	uint64 startTime = getTimeMilliseconds();
 	send(serverSocket, fStr_get(fStr_headerData), fStr_len(fStr_headerData), 0);
+	std::cout << "Headers: " << fStr_get(fStr_headerData) << std::endl;
 	send(serverSocket, fStr_get(fStr_jsonRequestData), fStr_len(fStr_jsonRequestData), 0);
+	std::cout << "Request: " << fStr_get(fStr_jsonRequestData) << std::endl;
 	// receive header and request data
 	uint8* recvBuffer = (uint8*)fStr_get(fStr_jsonRequestData);
 	uint32 recvLimit = fStr_getLimit(fStr_jsonRequestData);
@@ -226,7 +228,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		tv.tv_usec = 0;
 		// wait until timeout or data received.
 		n = select(serverSocket, &fds, NULL, NULL, &tv ) ;
-		if( n == 0)
+/*		if( n == 0)
 		{
 			//uint32 passedTime = GetTickCount() - startTime;
       uint64 passedTime = getTimeMilliseconds() - startTime;
@@ -238,7 +240,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		{
 			printf("JSON receive error\n");
 			break;
-		}
+		}*/
 		int32_t r = recv(serverSocket, (char*)(recvBuffer+recvIndex), remainingRecvSize, 0);
 		if( r <= 0 )
 		{
