@@ -31,8 +31,7 @@ static const unsigned int nDefaultSieveExtensionsTestnet = 4;
 extern unsigned int nSieveExtensions;
 
 extern unsigned int nMaxSieveSize;
-extern unsigned int vPrimesSize;
-extern unsigned int nMaxPrimes;
+extern unsigned int nSievePercentage;
 extern bool nPrintDebugMessages;
 extern unsigned long nOverrideTargetValue;
 extern unsigned int nOverrideBTTargetValue;
@@ -95,6 +94,7 @@ bool TargetSetLength(unsigned int nLength, unsigned int& nBits);
 unsigned int TargetGetFractional(unsigned int nBits);
 uint64 TargetGetFractionalDifficulty(unsigned int nBits);
 bool TargetSetFractionalDifficulty(uint64 nFractionalDifficulty, unsigned int& nBits);
+std::string TargetToString(unsigned int nBits);
 unsigned int TargetFromInt(unsigned int nLength);
 bool TargetGetMint(unsigned int nBits, uint64& nMint);
 bool TargetGetNext(unsigned int nBits, uint64_t nInterval, uint64_t nTargetSpacing, uint64 nActualSpacing, unsigned int& nBitsNext);
@@ -140,7 +140,7 @@ class CSieveOfEratosthenes
 {
    static const int nMinPrimeSeq = 4; // this is Prime number 11, the first prime with unknown factor status.
     unsigned int nSieveSize; // size of the sieve
-   unsigned int nMaxPrimes; //weave up to max primes
+   unsigned int nSievePercentage; // weave up to a percentage of primes
     unsigned int nSieveExtensions; // extend the sieve a given number of times
 	unsigned int nAllocatedSieveSize;
     mpz_class mpzHash; // hash of the block header
@@ -197,10 +197,11 @@ class CSieveOfEratosthenes
    void ProcessMultiplier(sieve_word_t *vfComposites, const unsigned int nMinMultiplier, const unsigned int nMaxMultiplier, const std::vector<unsigned int>& vPrimes, unsigned int *vMultipliers, unsigned int nLayerSeq);
 
 public:
-   CSieveOfEratosthenes(unsigned int nSieveSize, unsigned int nMaxPrimes, unsigned int nSieveExtensions, unsigned int nTargetChainLength, unsigned int nTargetBTLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
+   CSieveOfEratosthenes(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtensions, unsigned int nTargetChainLength, unsigned int nTargetBTLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
     {
         this->nSieveSize = nSieveSize;
 		this->nAllocatedSieveSize = nSieveSize;
+      this->nSievePercentage = nSievePercentage;
       this->nSieveExtensions = nSieveExtensions;
         this->mpzHash = mpzHash;
         this->mpzFixedMultiplier = mpzFixedMultiplier;
@@ -208,7 +209,7 @@ public:
       this->nBTChainLength = nTargetBTLength;
       this->nSieveLayers = nChainLength + nSieveExtensions;
       this->nTotalPrimes = vPrimes.size();
-      this->nPrimes = (uint64)nMaxPrimes;
+      this->nPrimes = (uint64)nTotalPrimes * nSievePercentage / 100;
       this->nPrimeSeq = nMinPrimeSeq;
       this->nCandidateCount = 0;
       this->nCandidateMultiplier = 0;
@@ -268,9 +269,10 @@ public:
     }
 
 
-   void Init(unsigned int nSieveSize, unsigned int nMaxPrimes, unsigned int nSieveExtensions, unsigned int nTargetChainLength, unsigned int nTargetBTLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
+   void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtensions, unsigned int nTargetChainLength, unsigned int nTargetBTLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
     {
         this->nSieveSize = nSieveSize;
+      this->nSievePercentage = nSievePercentage;
       this->nSieveExtensions = nSieveExtensions;
         this->mpzHash = mpzHash;
         this->mpzFixedMultiplier = mpzFixedMultiplier;
@@ -278,7 +280,7 @@ public:
       this->nBTChainLength = nTargetBTLength;
       this->nSieveLayers = nChainLength + nSieveExtensions;
       this->nTotalPrimes = vPrimes.size();
-      this->nPrimes = (uint64)nMaxPrimes;
+      this->nPrimes = (uint64)nTotalPrimes * nSievePercentage / 100;
       this->nPrimeSeq = nMinPrimeSeq;
       this->nCandidateCount = 0;
       this->nCandidateMultiplier = 0;
