@@ -855,6 +855,55 @@ void jhMiner_parseCommandline(int argc, char **argv)
 	}
 }
 
+<<<<<<< HEAD
+=======
+/*
+ * Mainloop when using getwork() mode
+ */
+int jhMiner_main_getworkMode()
+{
+	threadHearthBeat = (DWORD *)malloc( commandlineInput.numThreads * sizeof(DWORD));
+	// start threads	
+	for(sint32 threadIdx=0; threadIdx<commandlineInput.numThreads; threadIdx++)
+		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_getwork, (LPVOID)threadIdx, 0, 0);
+	// main thread, query work every 8 seconds
+	sint32 loopCounter = 0;
+	while( true )
+	{
+		// query new work
+		jhMiner_queryWork_primecoin();
+		// calculate stats every second tick
+		if( loopCounter&1 )
+		{
+			double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
+			if( statsPassedTime < 1.0 )
+				statsPassedTime = 1.0; // avoid division by zero
+			double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
+			primeStats.primeLastUpdate = GetTickCount();
+			primeStats.primeChainsFound = 0;
+			uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
+			primeStats.bestPrimeChainDifficulty = 0;
+			double primeDifficulty = (double)bestDifficulty / (double)0x1000000;
+			if( workData.workEntry[0].dataIsValid )
+			{
+				primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
+				printf("primes/s: %d best difficulty: %f record: %f\n", (sint32)primesPerSecond, (float)primeDifficulty, (float)primeStats.bestPrimeChainDifficultySinceLaunch);
+			}
+		}		
+		// wait and check some stats
+		uint32 time_updateWork = GetTickCount();
+		while( true )
+		{
+			uint32 passedTime = GetTickCount() - time_updateWork;
+			if( passedTime >= 4000 )
+				break;
+			Sleep(200);
+		}
+		loopCounter++;
+	}
+	return 0;
+}
+>>>>>>> 2f46aeb5cc2fdfccfb93e6959d25a6409863f64e
 
 bool fIncrementPrimorial = true;
 
