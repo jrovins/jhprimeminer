@@ -33,14 +33,25 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 // original primecoin BN stuff
 #include"uint256.h"
 #include"bignum2.h"
-//#include"bignum_custom.h"
-
 #include"prime.h"
 #include"jsonrpc.h"
 
 #include "mpirxx.h"
 #include "mpir.h"
+#ifndef _MSC_VER == 1500
 #include<stdint.h>
+#else
+// stdint.h not present in vs2008, use these defines instead:
+typedef signed char int8_t;
+typedef short int int16_t;
+typedef int int32_t;
+typedef __int64 int64_t;
+
+typedef unsigned char uint8_t;
+typedef unsigned short int uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned __int64 uint64_t;
+#endif
 #include"xptServer.h"
 #include"xptClient.h"
 
@@ -194,6 +205,8 @@ typedef struct
 	serverData_t serverData;
 	uint32 threadIndex; // the index of the miner thread
 	bool xptMode;
+	// getblocktemplate data
+	uint32 seed;
 }primecoinBlock_t;
 
 
@@ -239,3 +252,7 @@ static inline uint32_t le32dec(const void *pp)
 	    ((uint32_t)(p[2]) << 16) + ((uint32_t)(p[3]) << 24));
 }
 #endif
+
+
+#include"transaction.h"
+uint64 jhMiner_primeCoin_targetGetMint(unsigned int nBits);
