@@ -67,6 +67,7 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
 }
 
+//#define loop                for (;;)
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
 #define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
@@ -137,7 +138,6 @@ typedef struct
 	volatile uint32 bestPrimeChainDifficulty;
 	volatile double bestPrimeChainDifficultySinceLaunch;
 	uint32 primeLastUpdate;
-	uint32 blockStartTime;
 	uint32 startTime;
 	bool shareFound;
 	bool shareRejected;
@@ -146,6 +146,8 @@ typedef struct
 }primeStats_t;
 
 extern primeStats_t primeStats;
+extern bool bSoloMining;
+
 
 typedef struct  
 {
@@ -165,11 +167,24 @@ typedef struct
 	bool xptMode;
 }primecoinBlock_t;
 
+
+struct blockHeader_t {
+  uint32	version;            //4(0)
+  uint256	prevBlockHash;      //32(4)
+  uint256	merkleRoot;			//32(36)
+  uint32	timestamp;          //4(68)
+  uint32	nBits;              //4(72)
+  uint32	nonce;              //4(76)
+  uint8		primeMultiplier[48];//48(80)
+};                                   
+
+
 extern jsonRequestTarget_t jsonRequestTarget; // rpc login data
 
 // prototypes from main.cpp
 bool error(const char *format, ...);
 bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock);
+bool SubmitBlock(primecoinBlock_t* pcBlock);
 void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 hashOutput[32]);
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
