@@ -5,7 +5,6 @@
 #include<map>
 #include<conio.h>
 
-
 primeStats_t primeStats = {0};
 volatile int total_shares = 0;
 volatile int valid_shares = 0;
@@ -15,6 +14,28 @@ bool nPrintDebugMessages;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 char* dt;
+bool useGetBlockTemplate = true;
+uint8 decodedWalletAddress[32];
+int decodedWalletAddressLen;
+
+typedef struct  
+{
+   bool isValidData;
+   // block data
+   uint32 version;
+   uint32 height;
+   uint32 nTime;
+   uint32 nBits;
+   uint8 previousBlockHash[32];
+   uint8 target[32]; // sha256 & scrypt
+   // coinbase aux
+   uint8 coinbaseauxFlags[128];
+   uint32 coinbaseauxFlagsLength; // in bytes
+   // todo: mempool transactions
+}getBlockTemplateData_t;
+
+getBlockTemplateData_t getBlockTemplateData = {0};
+
 
 bool error(const char *format, ...)
 {
@@ -76,11 +97,61 @@ uint32 _getHexDigitValue(uint8 c)
    return 0;
 }
 
+
+static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+inline bool DecodeBase58(const char* psz, uint8* vchRet, int* retLength)
+{
+   CAutoBN_CTX pctx;
+   CBigNum bn58 = 58;
+   CBigNum bn = 0;
+   CBigNum bnChar;
+   while (isspace(*psz))
+      psz++;
+   // Convert big endian string to bignum
+   for (const char* p = psz; *p; p++)
+   {
+      const char* p1 = strchr(pszBase58, *p);
+      if (p1 == NULL)
+      {
+         while (isspace(*p))
+            p++;
+         if (*p != '\0')
+            return false;
+         break;
+      }
+      bnChar.setulong(p1 - pszBase58);
+      if (!BN_mul(&bn, &bn, &bn58, pctx))
+         throw bignum_error("DecodeBase58 : BN_mul failed");
+      bn += bnChar;
+   }
+
+   // Get bignum as little endian data
+   std::vector<unsigned char> vchTmp = bn.getvch();
+
+   // Trim off sign byte if present
+   if (vchTmp.size() >= 2 && vchTmp.end()[-1] == 0 && vchTmp.end()[-2] >= 0x80)
+      vchTmp.erase(vchTmp.end()-1);
+
+   // Restore leading zeros
+   int nLeadingZeros = 0;
+   for (const char* p = psz; *p == pszBase58[0]; p++)
+      nLeadingZeros++;
+   // Convert little endian data to big endian
+   int rLen = nLeadingZeros + vchTmp.size();
+   for(int i=0; i<rLen; i++)
+   {
+      vchRet[rLen-i-1] = vchTmp[i];
+   }
+   *retLength = rLen;
+   return true;
+}
+
 /*
 * Parses a hex string
 * Length should be a multiple of 2
 */
-void yPoolWorkMgr_parseHexString(char* hexString, uint32 length, uint8* output)
+void jhMiner_parseHexString(char* hexString, uint32 length, uint8* output)
 {
    uint32 lengthBytes = length / 2;
    for(uint32 i=0; i<lengthBytes; i++)
@@ -98,7 +169,7 @@ void yPoolWorkMgr_parseHexString(char* hexString, uint32 length, uint8* output)
 * Parses a hex string and converts it to LittleEndian (or just opposite endianness)
 * Length should be a multiple of 2
 */
-void yPoolWorkMgr_parseHexStringLE(char* hexString, uint32 length, uint8* output)
+void jhMiner_parseHexStringLE(char* hexString, uint32 length, uint8* output)
 {
    uint32 lengthBytes = length / 2;
    for(uint32 i=0; i<lengthBytes; i++)
@@ -170,30 +241,31 @@ typedef struct
 #define MINER_PROTOCOL_GETWORK		(1)
 #define MINER_PROTOCOL_STRATUM		(2)
 #define MINER_PROTOCOL_XPUSHTHROUGH	(3)
+#define MINER_PROTOCOL_GBT			(4)
 
 bool bSoloMining = false;
 workData_t workData;
 int lastBlockCount = 0;
 
 jsonRequestTarget_t jsonRequestTarget; // rpc login data
-jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
 bool useLocalPrimecoindForLongpoll;
 
 /*
 * Pushes the found block data to the server for giving us the $$$
 * Uses getwork to push the block
 * Returns true on success
-* Note that the primecoin data can be larger due to the multiplier at the end, so we use 256 bytes per default
+* Note that the primecoin data can be larger due to the multiplier at the end, so we use 512 bytes per default
+* 29.sep: switched to 512 bytes per block as default, since Primecoin can use up to 2000 bits (250 bytes) for the multiplier chain + length prefix of 2 bytes
 */
-bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock)
+bool jhMiner_pushShare_primecoin(uint8 data[512], primecoinBlock_t* primecoinBlock)
 {
    if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
    {
       // prepare buffer to send
       fStr_buffer4kb_t fStrBuffer_parameter;
       fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
-      fStr_append(fStr_parameter, "[\""); // \"]
-      fStr_addHexString(fStr_parameter, data, 256);
+      fStr_append(fStr_parameter, "[\"");
+      fStr_addHexString(fStr_parameter, data, 512);
       fStr_appendFormatted(fStr_parameter, "\",\"");
       fStr_addHexString(fStr_parameter, (uint8*)&primecoinBlock->serverData, 32);
       fStr_append(fStr_parameter, "\"]");
@@ -232,6 +304,85 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
       jsonObject_freeObject(jsonReturnValue);
       return false;
    }
+   else if( workData.protocolMode == MINER_PROTOCOL_GBT )
+   {
+      // use submitblock
+      char* methodName = "submitblock";
+      // get multiplier
+      CBigNum bnPrimeChainMultiplier;
+      bnPrimeChainMultiplier.SetHex(primecoinBlock->mpzPrimeChainMultiplier.get_str(16));
+      std::vector<unsigned char> bnSerializeData = bnPrimeChainMultiplier.getvch();
+      sint32 lengthBN = bnSerializeData.size();
+      //memcpy(xptShareToSubmit->chainMultiplier, &bnSerializeData[0], lengthBN);
+      //xptShareToSubmit->chainMultiplierSize = lengthBN;
+      // prepare raw data of block
+      uint8 dataRaw[512] = {0};
+      uint8 proofOfWorkHash[32];
+      bool shareAccepted = false;
+      memset(dataRaw, 0x00, sizeof(dataRaw));
+      *(uint32*)(dataRaw+0) = primecoinBlock->version;
+      memcpy((dataRaw+4), primecoinBlock->prevBlockHash, 32);
+      memcpy((dataRaw+36), primecoinBlock->merkleRoot, 32);
+      *(uint32*)(dataRaw+68) = primecoinBlock->timestamp;
+      *(uint32*)(dataRaw+72) = primecoinBlock->nBits;
+      *(uint32*)(dataRaw+76) = primecoinBlock->nonce;
+      *(uint8*)(dataRaw+80) = lengthBN;
+      if( lengthBN > 0x7F )
+         printf("Warning: chainMultiplierSize exceeds 0x7F in jhMiner_pushShare_primecoin()\n");
+      memcpy(dataRaw+81, &bnSerializeData[0], lengthBN);
+      // create stream to write block data to
+      stream_t* blockStream = streamEx_fromDynamicMemoryRange(1024*64);
+      // write block data
+      stream_writeData(blockStream, dataRaw, 80+1+lengthBN);
+      // generate coinbase transaction
+      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock->seed, primecoinBlock->threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock->nBits));
+      // write amount of transactions (varInt)
+      bitclient_addVarIntFromStream(blockStream, 1);
+      bitclient_writeTransactionToStream(blockStream, txCoinbase);
+      // map buffer
+      sint32 blockDataLength = 0;
+      uint8* blockData = (uint8*)streamEx_map(blockStream, &blockDataLength);
+      // clean up
+      bitclient_destroyTransaction(txCoinbase);
+      // prepare buffer to send
+      fStr_buffer4kb_t fStrBuffer_parameter;
+      fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
+      fStr_append(fStr_parameter, "[\""); // \"]
+      fStr_addHexString(fStr_parameter, blockData, blockDataLength);
+      fStr_append(fStr_parameter, "\"]");
+      // send request
+      sint32 rpcErrorCode = 0;
+      jsonObject_t* jsonReturnValue = NULL;
+      jsonReturnValue = jsonClient_request(&jsonRequestTarget, methodName, fStr_parameter, &rpcErrorCode);		
+      // clean up rest
+      stream_destroy(blockStream);
+      free(blockData);
+      // process result
+      if( jsonReturnValue == NULL )
+      {
+         printf("SubmitBlock failed :(\n");
+         return false;
+      }
+      else
+      {
+         // is the bitcoin client happy with the result?
+         jsonObject_t* jsonReturnValueRejectReason = jsonObject_getParameter(jsonReturnValue, "result");
+         if( jsonObject_getType(jsonReturnValueRejectReason) == JSON_TYPE_NULL )
+         {
+            printf("Valid block found!\n");
+            jsonObject_freeObject(jsonReturnValue);
+            return true;
+         }
+         else
+         {
+            // :( the client says no
+            printf("Coin daemon rejected block :(\n");
+            jsonObject_freeObject(jsonReturnValue);
+            return false;
+         }
+      }
+
+   }
    else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
    {
       // printf("Queue share\n");
@@ -264,7 +415,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
 int queryLocalPrimecoindBlockCount(bool useLocal)
 {
    sint32 rpcErrorCode = 0;
-   jsonObject_t* jsonReturnValue = jsonClient_request(useLocal ? &jsonLocalPrimeCoin : &jsonRequestTarget, "getblockcount", NULL, &rpcErrorCode);
+   jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getblockcount", NULL, &rpcErrorCode);
    if( jsonReturnValue == NULL )
    {
       printf("getblockcount() failed with %serror code %d\n", (rpcErrorCode>1000)?"http ":"", rpcErrorCode>1000?rpcErrorCode-1000:rpcErrorCode);
@@ -293,10 +444,6 @@ static double target_diff(const unsigned char *target)
 
    return DIFFEXACTONE / (targ ? targ: 1);
 }
-
-
-//static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
-//static const uint64_t diffone = 0xFFFF000000000000ull;
 
 double target_diff(const uint32_t  *target)
 {
@@ -336,8 +483,90 @@ static bool IsXptClientConnected()
 
 }
 
+/*
+* Queries the work data from the coin client
+* Uses "getblocktemplate"
+* Should be called periodically (5-15 seconds) to keep the current block data up-to-date
+*/
+void jhMiner_queryWork_primecoin_getblocktemplate()
+{
+   sint32 rpcErrorCode = 0;
+   fStr_buffer4kb_t fStrBuffer_parameter;
+   fStr_t* fStr_parameter = fStr_alloc(&fStrBuffer_parameter, FSTR_FORMAT_UTF8);
+   fStr_append(fStr_parameter, "[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]");
+   jsonObject_t* jsonReturnValue = NULL;
+   jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getblocktemplate", fStr_parameter, &rpcErrorCode);
+   if( jsonReturnValue == NULL )
+   {
+      printf("UpdateWork(GetBlockTemplate) failed.\n");
+      getBlockTemplateData.isValidData = false;
+      return;
+   }
+   else
+   {
+      jsonObject_t* jsonResult = jsonObject_getParameter(jsonReturnValue, "result");
+      // data
+      jsonObject_t* jsonResult_version = jsonObject_getParameter(jsonResult, "version");
+      jsonObject_t* jsonResult_previousblockhash = jsonObject_getParameter(jsonResult, "previousblockhash");
+      jsonObject_t* jsonResult_target = jsonObject_getParameter(jsonResult, "target");
+      //jsonObject_t* jsonResult_mintime = jsonObject_getParameter(jsonResult, "mintime");
+      jsonObject_t* jsonResult_curtime = jsonObject_getParameter(jsonResult, "curtime");
+      jsonObject_t* jsonResult_bits = jsonObject_getParameter(jsonResult, "bits");
+      jsonObject_t* jsonResult_height = jsonObject_getParameter(jsonResult, "height");
+      jsonObject_t* jsonResult_coinbaseaux = jsonObject_getParameter(jsonResult, "coinbaseaux");
+      jsonObject_t* jsonResult_coinbaseaux_flags = NULL;
+      if( jsonResult_coinbaseaux )
+         jsonResult_coinbaseaux_flags = jsonObject_getParameter(jsonResult_coinbaseaux, "flags");
+      // are all fields present?
+      if( jsonResult_version == NULL || jsonResult_previousblockhash == NULL || jsonResult_curtime == NULL || jsonResult_bits == NULL || jsonResult_height == NULL || jsonResult_coinbaseaux_flags == NULL )
+      {
+         printf("UpdateWork(GetBlockTemplate) failed due to missing fields in the response.\n");
+         jsonObject_freeObject(jsonReturnValue);
+      }
+      // prepare field lengths
+      uint32 stringLength_previousblockhash = 0;
+      uint32 stringLength_target = 0;
+      uint32 stringLength_bits = 0;
+      uint32 stringLength_height = 0;
+      // get version
+      uint32 gbtVersion = jsonObject_getNumberValueAsS32(jsonResult_version);
+      // get previous block hash
+      uint8* stringData_previousBlockHash = jsonObject_getStringData(jsonResult_previousblockhash, &stringLength_previousblockhash);
+      RtlZeroMemory(getBlockTemplateData.previousBlockHash, 32);
+      jhMiner_parseHexStringLE((char*)stringData_previousBlockHash, stringLength_previousblockhash, getBlockTemplateData.previousBlockHash);
+      // get target hash (optional)
+      uint8* stringData_target = jsonObject_getStringData(jsonResult_target, &stringLength_target);
+      RtlZeroMemory(getBlockTemplateData.target, 32);
+      if( stringData_target )
+         jhMiner_parseHexStringLE((char*)stringData_target, stringLength_target, getBlockTemplateData.target);
+      // get timestamp (mintime)
+      uint32 gbtTime = jsonObject_getNumberValueAsU32(jsonResult_curtime);
+      // get bits
+      char bitsTmpText[32]; // temporary buffer so we can add NT
+      uint8* stringData_bits = jsonObject_getStringData(jsonResult_bits, &stringLength_bits);
+      memcpy(bitsTmpText, stringData_bits, stringLength_bits);
+      bitsTmpText[stringLength_bits] = '\0'; 
+      uint32 gbtBits = 0;
+      sscanf((const char*)bitsTmpText, "%x", &gbtBits);
+      // get height
+      uint32 gbtHeight = jsonObject_getNumberValueAsS32(jsonResult_height);
+      // get coinbase aux flags
+      uint32 stringLength_coinbaseauxFlags = 0;
+      uint8* stringData_coinbaseauxFlags = jsonObject_getStringData(jsonResult_coinbaseaux_flags, &stringLength_coinbaseauxFlags);
+      jhMiner_parseHexString((char*)stringData_coinbaseauxFlags, stringLength_coinbaseauxFlags, getBlockTemplateData.coinbaseauxFlags);
+      getBlockTemplateData.coinbaseauxFlagsLength = stringLength_coinbaseauxFlags/2;
+      // set remaining number parameters
+      getBlockTemplateData.version = gbtVersion;
+      getBlockTemplateData.nBits = gbtBits;
+      getBlockTemplateData.nTime = gbtTime;
+      getBlockTemplateData.height = gbtHeight;
+      // done
+      jsonObject_freeObject(jsonReturnValue);
+      getBlockTemplateData.isValidData = true;
+   }
+}
 
-void jhMiner_queryWork_primecoin()
+void jhMiner_queryWork_primecoin_getwork()
 {
    sint32 rpcErrorCode = 0;
    uint32 time1 = GetTickCount();
@@ -371,7 +600,7 @@ void jhMiner_queryWork_primecoin()
       //printf("data: %.*s...\n", (sint32)min(48, stringData_length), stringData_data);
 
       EnterCriticalSection(&workData.cs);
-      yPoolWorkMgr_parseHexString((char*)stringData_data, min(128*2, stringData_length), workData.workEntry[0].data);
+      jhMiner_parseHexString((char*)stringData_data, min(128*2, stringData_length), workData.workEntry[0].data);
       workData.workEntry[0].dataIsValid = true;
       if (jsonResult_serverData == NULL)
       {
@@ -394,7 +623,7 @@ void jhMiner_queryWork_primecoin()
          uint8* stringServerData_data = jsonObject_getStringData(jsonResult_serverData, &stringServerData_length);
          RtlZeroMemory(workData.workEntry[0].serverData, 32);
          if( jsonResult_serverData )
-            yPoolWorkMgr_parseHexString((char*)stringServerData_data, min(128*2, 32*2), workData.workEntry[0].serverData);
+            jhMiner_parseHexString((char*)stringServerData_data, min(128*2, 32*2), workData.workEntry[0].serverData);
       }
       // generate work hash
       uint32 workDataHash = 0x5B7C8AF4;
@@ -489,6 +718,8 @@ uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 {
    if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
       return ((serverData_t*)workData.workEntry[0].serverData)->blockHeight;	
+   else if( workData.protocolMode == MINER_PROTOCOL_GBT )
+      return getBlockTemplateData.height;	
    else
       return ((serverData_t*)workData.workEntry[threadIndex].serverData)->blockHeight;
 }
@@ -525,6 +756,79 @@ int jhMiner_workerThread_getwork(int threadIndex)
       primecoinBlock.xptMode = (workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH);
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
+      // start mining
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+         break;
+      primecoinBlock.mpzPrimeChainMultiplier = 0;
+   }
+   if( psieve )
+   {
+      delete psieve;
+      psieve = NULL;
+   }
+   return 0;
+}
+
+static const sint64 PRIMECOIN_COIN = 100000000;
+static const sint64 PRIMECOIN_CENT = 1000000;
+static const unsigned int PRIMECOIN_nFractionalBits = 24;
+
+/*
+* Returns value of block
+*/
+uint64 jhMiner_primeCoin_targetGetMint(unsigned int nBits)
+{
+   if( nBits == 0 )
+      return 0;
+   uint64 nMint = 0;
+   static uint64 nMintLimit = 999ull * PRIMECOIN_COIN;
+   uint64 bnMint = nMintLimit;
+   bnMint = (bnMint << PRIMECOIN_nFractionalBits) / nBits;
+   bnMint = (bnMint << PRIMECOIN_nFractionalBits) / nBits;
+   bnMint = (bnMint / PRIMECOIN_CENT) * PRIMECOIN_CENT;  // mint value rounded to cent
+   nMint = bnMint;
+   return nMint;
+}
+
+/*
+* Worker thread mainloop for getblocktemplate mode
+*/
+int jhMiner_workerThread_gbt(int threadIndex)
+{
+   CSieveOfEratosthenes* psieve = NULL;
+   while( true )
+   {
+      //uint8 localBlockData[128];
+      primecoinBlock_t primecoinBlock = {0};
+      // copy block data from global workData
+      //uint32 workDataHash = 0;
+      //uint8 serverData[32];
+      while( getBlockTemplateData.isValidData == false ) Sleep(200);
+      EnterCriticalSection(&workData.cs);
+      // generate work from getBlockTemplate data
+      primecoinBlock.threadIndex = threadIndex;
+      primecoinBlock.version = getBlockTemplateData.version;
+      primecoinBlock.timestamp = getBlockTemplateData.nTime;
+      primecoinBlock.nonce = 0;
+      primecoinBlock.seed = rand();
+      primecoinBlock.nBits = getBlockTemplateData.nBits;
+      memcpy(primecoinBlock.prevBlockHash, getBlockTemplateData.previousBlockHash, 32);
+      // setup serverData struct
+      primecoinBlock.serverData.blockHeight = getBlockTemplateData.height;
+      primecoinBlock.serverData.nBitsForShare = getBlockTemplateData.nBits;
+      // generate coinbase transaction and merkleroot
+      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock.seed, threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock.nBits));
+      bitclientTransaction_t* txList[64];
+      txList[0] = txCoinbase;
+      uint32 numberOfTx = 1;
+      // generate tx hashes (currently we only support coinbase transaction)
+      uint8 txHashList[64*32];
+      for(uint32 t=0; t<numberOfTx; t++)
+         bitclient_generateTxHash(txList[t], (txHashList+t*32));
+      bitclient_calculateMerkleRoot(txHashList, numberOfTx, primecoinBlock.merkleRoot);
+      bitclient_destroyTransaction(txCoinbase);
+      LeaveCriticalSection(&workData.cs);
+      primecoinBlock.xptMode = false;
       // start mining
       if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
          break;
@@ -586,6 +890,7 @@ typedef struct
    char* workerpass;
    char* host;
    sint32 port;
+   bool useXPT;
    sint32 numThreads;
    sint32 sieveSize;
    sint32 sievePercentage;
@@ -598,6 +903,8 @@ typedef struct
    sint32 targetBTOverride;
    sint32 sieveExtensions;
    bool printDebug;
+   // getblocktemplate stuff
+   char* xpmAddress; // we will use this XPM address for block payout
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -608,6 +915,7 @@ void jhMiner_printHelp()
    puts("Options:");
    puts("   -o, -O                        The miner will connect to this url");
    puts("                                 You can specifiy an port after the url using -o url:port");
+   puts("   -xpt                          Use x.pushthrough protocol");
    puts("   -u                            The username (workername) used for login");
    puts("   -p                            The password used for login");
    puts("   -t <num>                      The number of threads for mining (default 1)");
@@ -622,7 +930,7 @@ void jhMiner_printHelp()
    puts("                                     By default 80% of time is spent in the sieve and 20% is spent on checking the candidates produced by the sieve");
    puts("   -primes <num>                 Sets how many prime factors are used to filter the sieve");
    puts("                                     Default is MaxSieveSize. Valid range: 300 - 200000000");
-
+   puts("   -xpm <wallet address>         When doing solo mining this is the address your mined XPM will be transfered to.");
    puts("Example usage:");
    puts("   jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4");
    puts("Press any key to continue...");
@@ -642,7 +950,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing URL after -o option\n");
-            ExitProcess(0);
+            exit(0);
          }
          if( strstr(argv[cIdx], "http://") )
             commandlineInput.host = fStrDup(strstr(argv[cIdx], "http://")+7);
@@ -662,7 +970,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing username/workername after -u option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.workername = fStrDup(argv[cIdx], 64);
          cIdx++;
@@ -673,9 +981,20 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing password after -p option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.workerpass = fStrDup(argv[cIdx], 64);
+         cIdx++;
+      }
+      else if( memcmp(argument, "-xpm", 5)==0 )
+      {
+         // -xpm
+         if( cIdx >= argc )
+         {
+            printf("Missing wallet address after -xpm option\n");
+            exit(0);
+         }
+         commandlineInput.xpmAddress = fStrDup(argv[cIdx], 64);
          cIdx++;
       }
       else if( memcmp(argument, "-t", 3)==0 )
@@ -684,13 +1003,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing thread number after -t option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.numThreads = atoi(argv[cIdx]);
          if( commandlineInput.numThreads < 1 || commandlineInput.numThreads > 128 )
          {
             printf("-t parameter out of range");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -700,13 +1019,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -s option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.sieveSize = atoi(argv[cIdx]);
          if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 40000000 )
          {
             printf("-s parameter out of range, must be between 200000 - 10000000");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -716,13 +1035,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -d option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.sievePercentage = atoi(argv[cIdx]);
          if( commandlineInput.sievePercentage < 1 || commandlineInput.sievePercentage > 100 )
          {
             printf("-d parameter out of range, must be between 1 - 100");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -732,13 +1051,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -r option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.roundSievePercentage = atoi(argv[cIdx]);
          if( commandlineInput.roundSievePercentage < 3 || commandlineInput.roundSievePercentage > 97 )
          {
             printf("-r parameter out of range, must be between 3 - 97");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -748,13 +1067,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -primes option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.sievePrimeLimit = atoi(argv[cIdx]);
          if( commandlineInput.sievePrimeLimit < 300 || commandlineInput.sievePrimeLimit > 200000000 )
          {
             printf("-primes parameter out of range, must be between 300 - 200000000");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -764,13 +1083,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -c option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.L1CacheElements = atoi(argv[cIdx]);
          if( commandlineInput.L1CacheElements < 300 || commandlineInput.L1CacheElements > 200000000  || commandlineInput.L1CacheElements % 32 != 0) 
          {
             printf("-c parameter out of range, must be between 64000 - 2000000 and multiply of 32");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -780,13 +1099,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -m option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.primorialMultiplier = atoi(argv[cIdx]);
          if( commandlineInput.primorialMultiplier < 5 || commandlineInput.primorialMultiplier > 1009) 
          {
             printf("-m parameter out of range, must be between 5 - 1009 and should be a prime number");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -796,7 +1115,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing flag after -tune option\n");
-            ExitProcess(0);
+            exit(0);
          }
          if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
             commandlineInput.enableCacheTunning = true;
@@ -809,13 +1128,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -target option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.targetOverride = atoi(argv[cIdx]);
          if( commandlineInput.targetOverride < 0 || commandlineInput.targetOverride > 100 )
          {
             printf("-target parameter out of range, must be between 0 - 100");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -825,13 +1144,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -bttarget option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.targetBTOverride = atoi(argv[cIdx]);
          if( commandlineInput.targetBTOverride < 0 || commandlineInput.targetBTOverride > 100 )
          {
             printf("-bttarget parameter out of range, must be between 0 - 100");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -841,13 +1160,13 @@ void jhMiner_parseCommandline(int argc, char **argv)
          if( cIdx >= argc )
          {
             printf("Missing number after -se option\n");
-            ExitProcess(0);
+            exit(0);
          }
          commandlineInput.sieveExtensions = atoi(argv[cIdx]);
          if( commandlineInput.sieveExtensions < 1 || commandlineInput.sieveExtensions > 15 )
          {
             printf("-se parameter out of range, must be between 0 - 15\n");
-            ExitProcess(0);
+            exit(0);
          }
          cIdx++;
       }
@@ -863,21 +1182,25 @@ void jhMiner_parseCommandline(int argc, char **argv)
             commandlineInput.printDebug = true;
          cIdx++;
       }
+      else if( memcmp(argument, "-xpt", 5)==0 )
+      {
+         commandlineInput.useXPT = true;
+      }
       else if( memcmp(argument, "-help", 6)==0 || memcmp(argument, "--help", 7)==0 )
       {
          jhMiner_printHelp();
-         ExitProcess(0);
+         exit(0);
       }
       else
       {
          printf("'%s' is an unknown option.\nType jhPrimeminer.exe --help for more info\n", argument); 
-         ExitProcess(-1);
+         exit(-1);
       }
    }
    if( argc <= 1 )
    {
       jhMiner_printHelp();
-      ExitProcess(0);
+      exit(0);
    }
 }
 
@@ -950,7 +1273,7 @@ static void CacheAutoTuningWorkerThread(bool bEnabled)
          continue;// wait a litle at the beginning
 
       nL1CacheElements = primeStats.nL1CacheElements;
-      mL1Stat.insert( KeyVal(primeStats.nL1CacheElements, primeStats.nWaveRound == 0 ? 0xFFFF : primeStats.nWaveTime / primeStats.nWaveRound));
+      mL1Stat.insert( KeyVal((unsigned int)primeStats.nL1CacheElements, (unsigned int)primeStats.nWaveRound == 0 ? 0xFFFF : primeStats.nWaveTime / primeStats.nWaveRound));
       if (nL1CacheElements < nL1CacheElementsMax)
          primeStats.nL1CacheElements += nL1CacheElementsIncrement;
       else
@@ -995,6 +1318,11 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
 
       while (true)
       {
+         if (bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning || !IsXptClientConnected())
+         {
+            Sleep(10);
+            continue;
+         }
          primeStats.nWaveTime = 0;
          primeStats.nWaveRound = 0;
          primeStats.nTestTime = 0;
@@ -1171,46 +1499,48 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
       {
          // Miner is not connected, wait 5 secs before trying again.
          Sleep(5000);
-         continue;
-      }
-
-      DWORD currentTick = GetTickCount();
-
-      for (int i = 0; i < threadMap.size(); i++)
-      {
-         DWORD heartBeatTick = threadHearthBeat[i];
-         if (currentTick - heartBeatTick > maxIdelTime)
          {
-            //restart the thread
-            printf("Restarting thread %d\n", i);
-            //__try
-            //{
-
-            //HANDLE h = threadMap.at(i);
-            thMap_Iter = threadMap.find(i);
-            if (thMap_Iter != threadMap.end())
-            {
-               HANDLE h = thMap_Iter->second;
-               TerminateThread( h, 0);
-               Sleep(1000);
-               CloseHandle(h);
-               Sleep(1000);
-               threadHearthBeat[i] = GetTickCount();
-               threadMap.erase(thMap_Iter);
-
-               h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
-               SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
-
-               threadMap.insert(thMapKeyVal(i,h));
-
-            }
-            /*}
-            __except(EXCEPTION_EXECUTE_HANDLER)
-            {
-            }*/
+            Sleep(10);
+            continue;
          }
+         DWORD currentTick = GetTickCount();
+
+         for (int i = 0; i < threadMap.size(); i++)
+         {
+            DWORD heartBeatTick = threadHearthBeat[i];
+            if (currentTick - heartBeatTick > maxIdelTime)
+            {
+               //restart the thread
+               printf("Restarting thread %d\n", i);
+               //__try
+               //{
+
+               //HANDLE h = threadMap.at(i);
+               thMap_Iter = threadMap.find(i);
+               if (thMap_Iter != threadMap.end())
+               {
+                  HANDLE h = thMap_Iter->second;
+                  TerminateThread( h, 0);
+                  Sleep(1000);
+                  CloseHandle(h);
+                  Sleep(1000);
+                  threadHearthBeat[i] = GetTickCount();
+                  threadMap.erase(thMap_Iter);
+
+                  h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
+                  SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
+
+                  threadMap.insert(thMapKeyVal(i,h));
+
+               }
+               /*}
+               __except(EXCEPTION_EXECUTE_HANDLER)
+               {
+               }*/
+            }
+         }
+         Sleep( 1*1000);
       }
-      Sleep( 1*1000);
    }
 }
 
@@ -1283,6 +1613,54 @@ void PrintStat()
 }
 
 /*
+* Mainloop when using getblocktemplate mode
+*/
+int jhMiner_main_gbtMode()
+{
+   // main thread, query work every x seconds
+   sint32 loopCounter = 0;
+   while( true )
+   {
+      // query new work
+      jhMiner_queryWork_primecoin_getblocktemplate();
+      // calculate stats every second tick
+      if( loopCounter&1 )
+      {
+         PrintStat();
+         primeStats.primeLastUpdate = GetTickCount();
+         primeStats.primeChainsFound = 0;
+         primeStats.nCandidateCount = 0;
+         primeStats.nSieveRounds = 0;
+      }		
+      // wait and check some stats
+      uint32 time_updateWork = GetTickCount();
+      while( true )
+      {
+         if (appQuitSignal)
+            return 0;
+         uint32 passedTime = GetTickCount() - time_updateWork;
+         if( passedTime >= 4000 )
+            break;
+         int currentBlockCount = getBlockTemplateData.height;
+         if (currentBlockCount != lastBlockCount && lastBlockCount > 0)
+         {	
+            serverData_t* serverData = (serverData_t*)workData.workEntry[0].serverData; 				
+            // update serverData
+            serverData->nBitsForShare = getBlockTemplateData.nBits;
+            serverData->blockHeight = getBlockTemplateData.height;
+            OnNewBlock(serverData->nBitsForShare, serverData->nBitsForShare, serverData->blockHeight);
+            lastBlockCount = currentBlockCount;
+            break;
+         }
+         lastBlockCount = currentBlockCount;
+         Sleep(200);
+      }
+      loopCounter++;
+   }
+   return 0;
+}
+
+/*
 * Mainloop when using getwork() mode
 */
 int jhMiner_main_getworkMode()
@@ -1292,7 +1670,7 @@ int jhMiner_main_getworkMode()
    while( true )
    {
       // query new work
-      jhMiner_queryWork_primecoin();
+      jhMiner_queryWork_primecoin_getwork();
       // calculate stats every second tick
       if( loopCounter&1 )
       {		
@@ -1443,7 +1821,6 @@ int main(int argc, char **argv)
    commandlineInput.targetBTOverride = 0;
    commandlineInput.sieveExtensions = 7;
    commandlineInput.printDebug = 0;
-
    commandlineInput.sievePrimeLimit = 0;
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
@@ -1472,11 +1849,27 @@ int main(int argc, char **argv)
    if( commandlineInput.host == NULL )
    {
       printf("Missing -o option\n");
-      ExitProcess(-1);	
+      exit(-1);	
    }
-
-   //CRYPTO_set_mem_ex_functions(mallocEx, reallocEx, freeEx);
-
+   // if set, validate xpm address
+   if( commandlineInput.xpmAddress )
+   {
+      DecodeBase58(commandlineInput.xpmAddress, decodedWalletAddress, &decodedWalletAddressLen);
+      sha256_context ctx;
+      uint8 addressValidationHash[32];
+      sha256_starts(&ctx);
+      sha256_update(&ctx, (uint8*)decodedWalletAddress, 20+1);
+      sha256_finish(&ctx, addressValidationHash);
+      sha256_starts(&ctx); // is this line needed?
+      sha256_update(&ctx, addressValidationHash, 32);
+      sha256_finish(&ctx, addressValidationHash);
+      if( *(uint32*)addressValidationHash != *(uint32*)(decodedWalletAddress+21) )
+      {
+         printf("Address '%s' is not a valid wallet address.\n", decodedWalletAddress);
+         exit(-2);
+      }
+   }
+   // print header
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
    printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.4beta                   \xBA\n");
@@ -1511,7 +1904,7 @@ int main(int argc, char **argv)
    if( hostInfo == NULL )
    {
       printf("Cannot resolve '%s'. Is it a valid URL?\n", commandlineInput.host);
-      ExitProcess(-1);
+      exit(-1);
    }
    void** ipListPtr = (void**)hostInfo->h_addr_list;
    uint32 ip = 0xFFFFFFFF;
@@ -1530,14 +1923,6 @@ int main(int argc, char **argv)
    jsonRequestTarget.port = commandlineInput.port;
    jsonRequestTarget.authUser = commandlineInput.workername;
    jsonRequestTarget.authPass = commandlineInput.workerpass;
-
-   jsonLocalPrimeCoin.ip = "127.0.0.1";
-   jsonLocalPrimeCoin.port = 9912;
-   jsonLocalPrimeCoin.authUser = "primecoinrpc";
-   jsonLocalPrimeCoin.authPass = "x";
-
-   //lastBlockCount = queryLocalPrimecoindBlockCount(useLocalPrimecoindForLongpoll);
-
    // init stats
    primeStats.primeLastUpdate = primeStats.startTime = GetTickCount();
    primeStats.shareFound = false;
@@ -1563,7 +1948,7 @@ int main(int argc, char **argv)
    printf("Username: %s\n", jsonRequestTarget.authUser);
    printf("Password: %s\n", jsonRequestTarget.authPass);
    // decide protocol
-   if( commandlineInput.port == 10034 )
+   if( commandlineInput.port == 10034 || commandlineInput.useXPT )
    {
       // port 10034 indicates xpt protocol (in future we will also add a -o URL prefix)
       workData.protocolMode = MINER_PROTOCOL_XPUSHTHROUGH;
@@ -1571,18 +1956,31 @@ int main(int argc, char **argv)
    }
    else
    {
-      workData.protocolMode = MINER_PROTOCOL_GETWORK;
-      printf("Using GetWork() protocol\n");
-      printf("Warning: \n");
-      printf("   GetWork() is outdated and inefficient. You are losing mining performance\n");
-      printf("   by using it. If the pool supports it, consider switching to x.pushthrough.\n");
-      printf("   Just add the port :10034 to the -o parameter.\n");
-      printf("   Example: jhPrimeminer.exe -o http://poolurl.net:10034 ...\n");
+      if( useGetBlockTemplate )
+      {
+         workData.protocolMode = MINER_PROTOCOL_GBT;
+         // getblocktemplate requires a valid xpm address to be set
+         if( commandlineInput.xpmAddress == NULL )
+         {
+            printf("GetBlockTemplate mode requires -xpm parameter\n");
+            exit(-3);
+         }
+      }
+      else
+      {
+         workData.protocolMode = MINER_PROTOCOL_GETWORK;
+         printf("Using GetWork() protocol\n");
+         printf("Warning: \n");
+         printf("   GetWork() is outdated and inefficient. You are losing mining performance\n");
+         printf("   by using it. If the pool supports it, consider switching to x.pushthrough.\n");
+         printf("   Just add the port :10034 to the -o parameter.\n");
+         printf("   Example: jhPrimeminer.exe -o http://poolurl.net:10034 ...\n");
+      }
    }
    // initial query new work / create new connection
    if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
    {
-      jhMiner_queryWork_primecoin();
+      jhMiner_queryWork_primecoin_getwork();
    }
    else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
    {
@@ -1658,9 +2056,9 @@ int main(int argc, char **argv)
    {
       HANDLE hThread;
       if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-      {
          hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_getwork, (LPVOID)threadIdx, 0, 0);
-      }
+      else if( workData.protocolMode == MINER_PROTOCOL_GBT )
+         hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_gbt, (LPVOID)threadIdx, 0, 0);
       else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
          hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)threadIdx, 0, 0);
 
@@ -1672,80 +2070,12 @@ int main(int argc, char **argv)
    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watchdog_thread, (LPVOID)&threadMap, 0, 0);
 
    // enter different mainloops depending on protocol mode
-   if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
+   if( workData.protocolMode == MINER_PROTOCOL_GBT )
+      return jhMiner_main_gbtMode();
+   else if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
       return jhMiner_main_getworkMode();
    else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
       return jhMiner_main_xptMode();
 
    return 0;
 }
-
-///*
-// * We need to call this before the actual initialization of the bignum constants in prime.h and other files
-// */
-//int preMain_initCryptoMemFunctions()
-//{
-//	//mallocSpeedupInit();
-//	/*CRYPTO_set_mem_ex_functions(mallocEx, reallocEx, freeEx);
-//	CRYPTO_set_mem_debug_functions(NULL, NULL, NULL, NULL, NULL);*/
-//	// See comment above mallocEx() method
-//	return 0;
-//}
-//
-//typedef int cb(void);
-//
-//#pragma data_seg(".CRT$XIU")
-//static cb *autostart[] = { preMain_initCryptoMemFunctions };
-//
-//#pragma data_seg() /* reset data-segment */
-
-/*
-void debug_getSieveDataHash(CSieveOfEratosthenes* sieve, uint8* hashOut)
-{
-sha256_context ctx;
-sha256_starts(&ctx);
-sha256_update(&ctx, (uint8*)sieve->vfCompositeCunningham1, (nMaxSieveSize+7)/8);
-sha256_update(&ctx, (uint8*)sieve->vfCompositeCunningham2, (nMaxSieveSize+7)/8);
-sha256_update(&ctx, (uint8*)sieve->vfCompositeBiTwin, (nMaxSieveSize+7)/8);
-sha256_finish(&ctx, hashOut);
-}
-*/
-
-//
-//int mainPerformanceTest()
-//{
-//	GeneratePrimeTable();
-//	// performance test for sieve generation
-//	sint32 sieveSize = 1000000;
-//	uint32 nBits = 0x07fb8bcc;
-//	uint256 blockHashHeader;
-//	yPoolWorkMgr_parseHexString("eed69c071ac2634ffc2a9e73177d1c5fad92fdf06f6d711c2f04877906ad6aef", 32*2, blockHashHeader.begin());
-//	CBigNum fixedMultiplier = CBigNum(0xB);
-//
-//	uint8 orgSieveHash[32];
-//	uint8 fastSieveHash[32];
-//
-//	printf("Generating original sieve and fast sieve...\n");
-//	uint32 time1 = GetTickCount();
-//	CSieveOfEratosthenes* originalSieve = new CSieveOfEratosthenes(sieveSize, nBits, blockHashHeader, fixedMultiplier);
-//	while (originalSieve->WeaveOriginal() );
-//	uint32 time2 = GetTickCount();
-//	printf("Original sieve time: %8dms Hash: ", time2-time1);
-//	debug_getSieveDataHash(originalSieve, orgSieveHash);
-//	for(uint32 i=0; i<12; i++)
-//		printf("%02x", orgSieveHash[i]);
-//	puts("");
-//	puts("Start generating fast sieve...\n");
-//	uint32 time3 = GetTickCount();
-//	CSieveOfEratosthenes* fastSieve = new CSieveOfEratosthenes(sieveSize, nBits, blockHashHeader, fixedMultiplier);
-//	//while (fastSieve->WeaveFast2() );
-//	fastSieve->WeaveFastAll();
-//	uint32 time4 = GetTickCount();
-//	printf("Fast sieve time:     %8dms Hash: ", time4-time3);
-//	debug_getSieveDataHash(fastSieve, fastSieveHash);
-//	for(uint32 i=0; i<12; i++)
-//		printf("%02x", fastSieveHash[i]);
-//	puts("");
-//	while( true ) Sleep(1000);
-//	return 0;
-//}

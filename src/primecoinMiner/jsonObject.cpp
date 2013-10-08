@@ -86,6 +86,17 @@ sint32 jsonObject_getNumberValueAsS32(jsonObject_t* jsonObject)
 	return (sint32)v;
 }
 
+/*
+ * Returns the value of the number as a unsigned integer
+ */
+uint32 jsonObject_getNumberValueAsU32(jsonObject_t* jsonObject)
+{
+	if( jsonObject->type != JSON_TYPE_NUMBER )
+		return 0;
+	jsonObjectNumber_t* jsonObjectNumber = (jsonObjectNumber_t*)jsonObject;
+	sint64 v = (sint64)jsonObjectNumber->number / (sint64)jsonObjectNumber->divider;
+	return (uint32)v;
+}
 
 /*
  * Returns string info if the given jsonObject is of type string

@@ -630,58 +630,46 @@ static bool ProbableCunninghamChainTestFast(const mpz_class& n, const bool fSoph
 
    const int chainIncremental = (fSophieGermain? 1 : (-1));
 
-   // Get prime origin.
    mpz_class &N = testParams.N;
-   mpz_class M = n;
    N = n;
+   unsigned int quickTargetCheck = 0;
+   if (bSoloMining)
+   {
+      // Get prime origin.
+      mpz_class M = n;
 
-   // Get target depth to check.
-   unsigned int quickTargetCheck = (!fBiTwinTest) ? testParams.nTargetLength : testParams.nHalfTargetLength;
-   M = (M + chainIncremental) * (1 << (quickTargetCheck - 2)) - chainIncremental;
-   //if (!fBiTwinTest) printf("Target-1: %s\n", M.get_str(16).c_str());
-   // If this target fails we don't have a valid candidate, go no further.
-   if (!FermatProbablePrimalityTestFast(M, nProbableChainLength, testParams, true))
-   {
-      return false;
-   }
-   else
-   {
-      M <<= 1;
-      M += chainIncremental;
-      //if (!fBiTwinTest) printf("Target  : %s\n", M.get_str(16).c_str());
+      // Get target depth to check.
+      quickTargetCheck = (!fBiTwinTest) ? testParams.nTargetLength : testParams.nHalfTargetLength;
+      M = (M + chainIncremental) * (1 << (quickTargetCheck - 2)) - chainIncremental;
+      // If this target fails we don't have a valid candidate, go no further.
       if (!FermatProbablePrimalityTestFast(M, nProbableChainLength, testParams, true))
       {
          return false;
+      }
+      else
+      {
+         M <<= 1;
+         M += chainIncremental;
+         if (!FermatProbablePrimalityTestFast(M, nProbableChainLength, testParams, true))
+         {
+            return false;
+         }
       }
    }
 
    // Euler-Lagrange-Lifchitz test for the following numbers in chain
    unsigned int currentLength = 0;
-   //N = n;
    while (true)
    {
       TargetIncrementLength(nProbableChainLength);
       N <<= 1;
       N += chainIncremental;
-      // printf("Step %u: %s\n",currentLength, N.get_str(10).c_str());
       currentLength++;
 
-      //if ((M == N) && (!fBiTwinTest))
-      //{
-      //      printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
-      //      int z= 0;
-      //}
-      if (currentLength == quickTargetCheck - 2)
+      if (bSoloMining)
       {
-         //if (quickTargetCheck == testParams.nTargetLength) 
-         //   printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
-         continue; // We already proved this length is valid.
-      }
-      if (currentLength == quickTargetCheck - 1)
-      {
-         //if (quickTargetCheck == testParams.nTargetLength)
-         //   printf("Step %u: %s\n",currentLength, N.get_str(16).c_str());
-         continue; // We already proved this length is valid.
+         if (currentLength == quickTargetCheck - 2) continue; // We already proved this length is valid.
+         if (currentLength == quickTargetCheck - 1) continue; // We already proved this length is valid.
       }
       if (fFermatTest)
       {
@@ -866,14 +854,16 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    if (nOverrideTargetValue > 0)
       lSieveTarget = nOverrideTargetValue;
    else
+   {
       lSieveTarget = TargetGetLength(block->nBits);
-   // If Difficulty gets within 1/36th of next target length, its actually more efficent to
-   // increase the target length.. While technically worse for share val/hr - this should
-   // help block rate.
-   // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
-   // to warrant a switch
-   if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
-      lSieveTarget++;
+      // If Difficulty gets within 1/36th of next target length, its actually more efficent to
+      // increase the target length.. While technically worse for share val/hr - this should
+      // help block rate.
+      // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
+      // to warrant a switch
+      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
+         lSieveTarget++;
+   }
 
    if (nOverrideBTTargetValue > 0)
       lSieveBTTarget = nOverrideBTTargetValue;
@@ -1653,7 +1643,7 @@ bool CSieveOfEratosthenes::Weave()
          // Apply the layer to the primary sieve arrays
          if (nLayerSeq < nChainLength)
          {
-            if (nLayerSeq < nBiTwinCC1Layers && nLayerSeq < nBiTwinCC2Layers)
+            if (nLayerSeq < nBiTwinCC2Layers)
             {
                for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
                {
@@ -1691,7 +1681,7 @@ bool CSieveOfEratosthenes::Weave()
                sieve_word_t *vfExtCC1 = vfExtendedCompositeCunningham1 + nExtensionSeq * nCandidatesWords;
                sieve_word_t *vfExtCC2 = vfExtendedCompositeCunningham2 + nExtensionSeq * nCandidatesWords;
                sieve_word_t *vfExtTWN = vfExtendedCompositeBiTwin + nExtensionSeq * nCandidatesWords;
-               if (nLayerExtendedSeq < nBiTwinCC1Layers && nLayerExtendedSeq < nBiTwinCC2Layers)
+               if (nLayerExtendedSeq < nBiTwinCC2Layers)
                {
                   for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
                   {

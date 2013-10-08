@@ -138,6 +138,9 @@
     <ClCompile Include="prime.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="transaction.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bignum2.h">
@@ -441,6 +444,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="prime.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="transaction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
