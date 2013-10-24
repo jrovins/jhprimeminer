@@ -757,7 +757,7 @@ int jhMiner_workerThread_getwork(int threadIndex)
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
@@ -830,7 +830,7 @@ int jhMiner_workerThread_gbt(int threadIndex)
       LeaveCriticalSection(&workData.cs);
       primecoinBlock.xptMode = false;
       // start mining
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
@@ -871,7 +871,7 @@ int jhMiner_workerThread_xpt(int threadIndex)
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
       //uint32 time1 = GetTickCount();
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       //printf("Mining stopped after %dms\n", GetTickCount()-time1);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
