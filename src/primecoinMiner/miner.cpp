@@ -7,7 +7,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
 
 std::set<mpz_class> multiplierSet;
 
-bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex)
+bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex, unsigned int nonceStep)
 {
 	//printf("PrimecoinMiner started\n");
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -31,8 +31,8 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 
 	//primecoinBlock->nonce = 0;
 	//TODO: check this if it makes sense
-	primecoinBlock->nonce = 0x01000000 * threadIndex;
-   const unsigned long maxNonce = (0x01000000 * threadIndex) | 0x00FF0000;
+	primecoinBlock->nonce = 1+threadIndex;
+	const unsigned long maxNonce = 0xFFFFFFFF;
 	//primecoinBlock->nonce = 0;
 
 	uint32 nTime = GetTickCount() + 1000*600;
@@ -66,12 +66,12 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 			if( newTimestamp != primecoinBlock->timestamp )
 			{
 				primecoinBlock->timestamp = newTimestamp;
-         	primecoinBlock->nonce = 0x01000000 * threadIndex;
+				primecoinBlock->nonce = 1+threadIndex;
 		//		primecoinBlock->nonce = 0;
 				//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
 		//		nPrimorialMultiplier = nPrimorialMultiplierStart;
 			}
-         nLastRollTime = nCurrentTick;
+			nLastRollTime = nCurrentTick;
 		}
 
 		primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
@@ -86,7 +86,7 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
         mpz_set_uint256(mpzHash.get_mpz_t(), phash);
         
 		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < maxNonce) {
-			primecoinBlock->nonce++;
+			primecoinBlock->nonce+=nonceStep;
 			primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
             phash = primecoinBlock->blockHeaderHash;
             mpz_set_uint256(mpzHash.get_mpz_t(), phash);
@@ -155,7 +155,7 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 		//}
 
 
-		primecoinBlock->nonce ++;
+		primecoinBlock->nonce+=nonceStep;
 		//primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
 		loopCount++;
 	}
