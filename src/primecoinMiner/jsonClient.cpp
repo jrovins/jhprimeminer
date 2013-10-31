@@ -3,7 +3,7 @@
 
 SOCKET jsonClient_openConnection(char *IP, int Port)
 {
-	SOCKET s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+	SOCKET s = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
 	SOCKADDR_IN addr;
 	memset(&addr,0,sizeof(SOCKADDR_IN));
 	addr.sin_family=AF_INET;
@@ -12,7 +12,8 @@ SOCKET jsonClient_openConnection(char *IP, int Port)
 	int result = connect(s,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN));
 	if( result )
 	{
-		return 0;
+		closesocket(s);
+		return SOCKET_ERROR;
 	}
 	return s;
 }
@@ -118,7 +119,7 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	*errorCode = JSON_ERROR_NONE;
 	// create connection to host
 	SOCKET serverSocket = jsonClient_openConnection(server->ip, server->port);
-	if( serverSocket == 0 )
+	if( serverSocket == SOCKET_ERROR )
 	{
 		*errorCode = JSON_ERROR_HOST_NOT_FOUND;
 		return NULL;
@@ -204,7 +205,8 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		{
 			// client closed connection
 			// this can also happen when we have received all data
-			serverSocket = 0; // set socket to zero so we know the connection is already closed
+			closesocket(serverSocket);
+			serverSocket = SOCKET_ERROR; // set socket to zero so we know the connection is already closed
 			break;
 		}
 		else
@@ -313,10 +315,10 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 	if( recvDataHeaderEnd != 0 )
 	{
 		// close connection (we kind of force this)
-		if( serverSocket != 0 )
+		if( serverSocket != SOCKET_ERROR )
 		{
 			closesocket(serverSocket);
-			serverSocket = 0;
+			serverSocket = SOCKET_ERROR;
 		}
 		// get request result data
 		char* requestData = (char*)(recvBuffer+recvDataHeaderEnd);
@@ -342,10 +344,10 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		return jsonObjectReturn;
 	}
 	// close connection
-	if( serverSocket != 0 )
+	if( serverSocket != SOCKET_ERROR )
 	{
 		closesocket(serverSocket);
-		serverSocket = 0;
+		serverSocket = SOCKET_ERROR;
 	}
 	// free everything again
 	fStr_free(fStr_jsonRequestData);
