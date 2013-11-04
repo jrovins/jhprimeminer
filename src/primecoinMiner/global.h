@@ -202,7 +202,7 @@ void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 h
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
 
-bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex);
+bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, const sint32 threadIndex, const unsigned int nonceStep);
 
 // direct access to share counters
 extern volatile int total_shares;
