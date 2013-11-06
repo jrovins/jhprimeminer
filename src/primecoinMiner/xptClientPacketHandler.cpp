@@ -1,4 +1,6 @@
 #include"global.h"
+#include <iostream>
+//#include"ticker.h"
 
 /*
  * Called when a packet with the opcode XPT_OPC_S_AUTH_ACK is received
@@ -23,16 +25,16 @@ bool xptClient_processPacket_authResponse(xptClient_t* xptClient)
 	if( authErrorCode == 0 )
 	{
 		xptClient->clientState = XPT_CLIENT_STATE_LOGGED_IN;
-		printf("xpt: Logged in\n");
-		if( rejectReason[0] != '\0' )
-			printf("Message from server: %s\n", rejectReason);
+			std::cout << "xpt: Logged in" << std::endl;
+			if( rejectReason[0] != '\0' )
+				std::cout << "Message from server: " << rejectReason << std::endl;
 	}
 	else
 	{
 		// error logging in -> disconnect
-		printf("xpt: Failed to log in\n");
+			std::cout << "xpt: Failed to log in" << std::endl;
 		if( rejectReason[0] != '\0' )
-			printf("Reason: %s\n", rejectReason);
+			std::cout << "Reason: " << rejectReason << std::endl;
 		return false;
 	}
 	return true;
@@ -58,12 +60,12 @@ bool xptClient_processPacket_blockData1(xptClient_t* xptClient)
 	uint32 payloadNum = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);							// payload num
 	if( recvError )
 	{
-		printf("xptClient_processPacket_blockData1(): Parse error\n");
+			std::cout << "xptClient_processPacket_blockData1(): Parse error" << std::endl;
 		return false;
 	}
 	if( xptClient->payloadNum != payloadNum )
 	{
-		printf("xptClient_processPacket_blockData1(): Invalid payloadNum\n");
+			std::cout << "xptClient_processPacket_blockData1(): Invalid payloadNum" << std::endl;
 		return false;
 	}
 	for(uint32 i=0; i<payloadNum; i++)
@@ -73,7 +75,7 @@ bool xptClient_processPacket_blockData1(xptClient_t* xptClient)
 	}
 	if( recvError )
 	{
-		printf("xptClient_processPacket_blockData1(): Parse error 2\n");
+			std::cout << "xptClient_processPacket_blockData1(): Parse error 2" << std::endl;
 		return false;
 	}
 	xptClient->workDataValid = true;
@@ -108,19 +110,45 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 		valid_shares++;
 		time_t now = time(0);
 		char* dt = ctime(&now);
-		//printf("Share accepted by server");
-		//printf(" [ %d / %d val: %.6f] %s", valid_shares, total_shares, shareValue, dt);
-      primeStats.fShareValue += shareValue;
-      primeStats.fBlockShareValue += shareValue;
+			//std::cout << "ACCEPTED [ " << valid_shares << " / " << total_shares << " val: " << shareValue << "] " << dt << std::endl;
+		primeStats.fShareValue += shareValue;
+		primeStats.fBlockShareValue += shareValue;
 		primeStats.fTotalSubmittedShareValue += shareValue;
 	}
 	else
 	{
 		// error logging in -> disconnect
 		total_shares++;
-		printf("Invalid share\n");
-		if( rejectReason[0] != '\0' )
-			printf("Reason: %s\n", rejectReason);
+			std::cout << "Invalid share" << std::endl;
+			if( rejectReason[0] != '\0' )
+				std::cout << "Reason: " << rejectReason << std::endl;
 	}
+	return true;
+}
+
+/*
+ * Called when a packet with the opcode XPT_OPC_S_PING is received
+ */
+bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient)
+{
+	// parse block data
+	bool recvError = false;
+	xptPacketbuffer_beginReadPacket(xptClient->recvBuffer);
+	xptClient->workDataValid = false;
+	// add general block info
+	uint32 version = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);			// version
+	uint32 tsLow = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);				// lower 32 bits of timestamp
+	uint32 tsHigh = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);				// upper 32 bits of timestamp
+	if( recvError )
+	{
+			std::cout << "xptClient_processPacket_client2ServerPing(): Parse error" << std::endl;
+		return false;
+	}
+
+	uint64 pingSentTimestamp = ((uint64) tsLow) | (((uint64) tsHigh) << 32);
+	uint64 now = GetTickCount64();
+	uint64 roundtrip = now - pingSentTimestamp;
+
+//	std::cout << "Reply from server time=" << roundtrip << "ms" << std::endl;
 	return true;
 }

@@ -26,7 +26,11 @@ typedef struct
 
 typedef struct _xptServer_t 
 {
+#ifdef _WIN32
 	SOCKET acceptSocket;
+#else
+	int acceptSocket;
+#endif
 	simpleList_t* list_connections;
 	xptPacketbuffer_t* sendBuffer; // shared buffer for sending data
 	// last known block height (for new block detection)
@@ -39,7 +43,11 @@ typedef struct _xptServer_t
 typedef struct  
 {
 	xptServer_t* xptServer;
+#ifdef _WIN32
 	SOCKET clientSocket;
+#else
+	int clientSocket;
+#endif
 	bool disconnected;
 	// recv buffer
 	xptPacketbuffer_t* packetbuffer;
@@ -76,6 +84,10 @@ typedef struct
 #define XPT_OPC_S_WORKDATA1		3
 #define XPT_OPC_C_SUBMIT_SHARE	4
 #define XPT_OPC_S_SHARE_ACK		5
+
+#define XPT_OPC_C_PING			8
+#define XPT_OPC_S_PING			8
+
 
 // list of error codes
 
