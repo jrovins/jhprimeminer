@@ -1,4 +1,5 @@
 #include"global.h"
+#include"ticker.h"
 #ifndef _WIN32
 #include <errno.h>
 #endif
@@ -104,7 +105,7 @@ void xptClient_free(xptClient_t* xptClient)
 
 void xptClient_client2ServerSent(xptClient_t* xptClient)
 {
-	xptClient->lastClient2ServerInteractionTimestamp = GetTickCount64();
+	xptClient->lastClient2ServerInteractionTimestamp = getTimeMilliseconds();
 }
 
 /*
@@ -129,7 +130,7 @@ void xptClient_sendClientServerPing(xptClient_t* xptClient, uint64 timestamp)
 
 void xptClient_processClientServerPing(xptClient_t* xptClient)
 {
-	uint64 now = GetTickCount64();
+	uint64 now = getTimeMilliseconds();
 	if ((xptClient->lastClient2ServerInteractionTimestamp + XPT_CLIENT_SERVER_PING_INTERVAL) < now)
 	{
 		xptClient_sendClientServerPing(xptClient, now);

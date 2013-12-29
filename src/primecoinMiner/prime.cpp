@@ -33,11 +33,13 @@ uint64 GetTimeMicros()
 }*/
 
 
+class CPrimalityTestParams;
 std::vector<unsigned int> vPrimes;
 unsigned int nSieveExtensions = nDefaultSieveExtensions;
 
 static unsigned int int_invert(unsigned int a, unsigned int nPrime);
 
+static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastFail = false);
 
 
 void GeneratePrimeTable(unsigned int nSieveSize)
@@ -151,6 +153,7 @@ void PrimorialAt(mpz_class& bn, mpz_class& mpzPrimorial)
 }
 
 
+#if 0  // Defined but not used
 // Check Fermat probable primality test (2-PRP): 2 ** (n-1) = 1 (mod n)
 // true: n is probable prime
 // false: n is composite; set fractional length in the nLength output
@@ -169,6 +172,7 @@ static bool FermatProbablePrimalityTest(const CBigNum& n, unsigned int& nLength)
    nLength = (nLength & TARGET_LENGTH_MASK) | nFractionalLength;
    return false;
 }
+#endif
 
 
 // Check Fermat probable primality test (2-PRP): 2 ** (n-1) = 1 (mod n)
@@ -215,6 +219,7 @@ static bool FermatProbablePrimalityTest(const mpz_class& n, unsigned int& nLengt
 //   true: n is probable prime
 //   false: n is composite; set fractional length in the nLength output
 
+#if 0  // Defined but not used
 static bool EulerLagrangeLifchitzPrimalityTest(const CBigNum& n, bool fSophieGermain, unsigned int& nLength)
 {
    //CBigNum a = 2;
@@ -252,7 +257,7 @@ static bool EulerLagrangeLifchitzPrimalityTest(const CBigNum& n, bool fSophieGer
    nLength = (nLength & TARGET_LENGTH_MASK) | nFractionalLength;
    return false;
 }
-
+#endif
 
 class CPrimalityTestParams
 {
@@ -302,7 +307,7 @@ public:
 // Check Fermat probable primality test (2-PRP): 2 ** (n-1) = 1 (mod n)
 // true: n is probable prime
 // false: n is composite; set fractional length in the nLength output
-static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastFail = false)
+static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nLength, CPrimalityTestParams& testParams, bool fFastFail)
 {
    // Faster GMP version
    mpz_t& mpzE = testParams.mpzE;
@@ -731,6 +736,7 @@ static bool ProbableCunninghamChainTest(const mpz_class& n, bool fSophieGermain,
    return (TargetGetLength(nProbableChainLength) >= 2);
 }
 
+#if 0 // Defined but not used
 static bool ProbableCunninghamChainTestBN(const CBigNum& n, bool fSophieGermain, bool fFermatTest, unsigned int& nProbableChainLength)
 {
    nProbableChainLength = 0;
@@ -759,6 +765,7 @@ static bool ProbableCunninghamChainTestBN(const CBigNum& n, bool fSophieGermain,
 
    return (TargetGetLength(nProbableChainLength) >= 2);
 }
+#endif
 
 // Test probable prime chain for: nOrigin
 // Return value:
@@ -860,6 +867,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //}
    fNewBlock = false;
    unsigned int lSieveTarget, lSieveBTTarget;
+//JLR
+//printf("MineProbablePrimeChain() Top\n");
    if (nOverrideTargetValue > 0)
       lSieveTarget = nOverrideTargetValue;
    else
@@ -882,6 +891,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //int64 nStart, nCurrent; // microsecond timer
    if (psieve == NULL)
    {
+//JLR
+//printf("MineProbablePrimeChain() Build sieve\n");
       // Build sieve
       psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
       psieve->Weave();
@@ -929,13 +940,15 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          // power tests completed for the sieve
          fNewBlock = true; // notify caller to change nonce
          rtnValue = false;
+//JLR
+//printf("v ");
          break;
       }
 
       nTests++;
       mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier;		
       nChainLength = 0;		
-	ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
+      ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
       nProbableChainLength = nChainLength;
       sint32 shareDifficultyMajor = 0;
 
@@ -944,17 +957,28 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       if( nProbableChainLength >= 0x06000000 )
       {
          shareDifficultyMajor = (sint32)(nChainLength>>24);
+printf("\n==========================================\n");
+printf("%x %d %x\n", nProbableChainLength, shareDifficultyMajor, block->serverData.nBitsForShare);
+printf("==========================================\n");
       }
       else
       {
+//JLR
+      if( nProbableChainLength >= 0x5500000 )
+printf("%x ", nProbableChainLength);
+//      else
+//printf(".");
          continue;
       }
 
-      primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, nProbableChainLength);
+      primeStats.bestPrimeChainDifficultySinceLaunch = 
+      std::max((double)primeStats.bestPrimeChainDifficultySinceLaunch, (double)nProbableChainLength);
 
 
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
+//JLR
+printf("Good  \n");
          // Update Stats
          primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
          primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
@@ -978,8 +1002,14 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          {
             // attempt to prevent duplicate share submissions.
             if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
+            {
+//JLR
+printf("Cont B  \n");
                continue;
+            }
 
+//JLR
+printf("At: C\n");
             // update server data
             block->serverData.client_shareBits = nProbableChainLength;
             // generate block raw data
@@ -1472,7 +1502,7 @@ void CSieveOfEratosthenes::ProcessMultiplier(sieve_word_t *vfComposites, const u
       memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(sieve_word_t));
 
    for (unsigned int nPrimeSeqLocal = nMinPrimeSeq; nPrimeSeqLocal < nPrimes; nPrimeSeqLocal++)
-{
+   {
       const unsigned int nPrime = vPrimes[nPrimeSeqLocal];
       const unsigned int nMultiplierPos = nPrimeSeqLocal * nSieveLayers + nLayerSeq;
       unsigned int nVariableMultiplier = vMultipliers[nMultiplierPos];
@@ -1541,7 +1571,7 @@ bool CSieveOfEratosthenes::Weave()
       {
          // Combine multiple primes to produce a big divisor
          unsigned int nPrimeCombined = 1;
-         while (nPrimeCombined < UINT_MAX / vPrimes[nCombinedEndSeq]  )
+         while (nPrimeCombined < UINT_MAX / vPrimes[nCombinedEndSeq]) // Not likely to occur// && nCombinedEndSeq < nTotalPrimesLessOne )
          {
             nPrimeCombined *= vPrimes[nCombinedEndSeq];
             nCombinedEndSeq++;
@@ -1573,10 +1603,10 @@ bool CSieveOfEratosthenes::Weave()
       unsigned int multiplierPos = nPrimeSeqLocal * nSieveLayers;
       if (fUse32BArithmetic)
       {
-      // Weave the sieve for the prime
+         // Weave the sieve for the prime
          for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
-      {
-         // Find the first number that's divisible by this prime
+         {
+            // Find the first number that's divisible by this prime
             vCunningham1Multipliers[multiplierPos] = nFixedInverse;
             vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
 
@@ -1586,13 +1616,13 @@ bool CSieveOfEratosthenes::Weave()
             // Increment Multiplier Positon.
             multiplierPos++;
          }
-         }
-         else
-         {
+      }
+      else
+      {
          // Weave the sieve for the prime
          for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
-      {
-         // Find the first number that's divisible by this prime
+         {
+            // Find the first number that's divisible by this prime
             vCunningham1Multipliers[multiplierPos] = nFixedInverse;
             vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
 
@@ -1645,7 +1675,7 @@ bool CSieveOfEratosthenes::Weave()
             // Optimize: First halves of the arrays are not needed in the extensions
             ProcessMultiplier(vfCompositeLayerCC1, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham1Multipliers, nLayerSeq);
             ProcessMultiplier(vfCompositeLayerCC2, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham2Multipliers, nLayerSeq);
-      }
+         }
 
          // Apply the layer to the primary sieve arrays
          if (nLayerSeq < nChainLength)
@@ -1680,10 +1710,10 @@ bool CSieveOfEratosthenes::Weave()
 
          // Apply the layer to extensions
          for (unsigned int nExtensionSeq = 0; nExtensionSeq < nSieveExtensions; nExtensionSeq++)
-      {
+         {
             const unsigned int nLayerOffset = nExtensionSeq + 1;
             if (nLayerSeq >= nLayerOffset && nLayerSeq < nChainLength + nLayerOffset)
-         {
+            {
                const unsigned int nLayerExtendedSeq = nLayerSeq - nLayerOffset;
                sieve_word_t *vfExtCC1 = vfExtendedCompositeCunningham1 + nExtensionSeq * nCandidatesWords;
                sieve_word_t *vfExtCC2 = vfExtendedCompositeCunningham2 + nExtensionSeq * nCandidatesWords;

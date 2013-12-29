@@ -1,4 +1,5 @@
 #include"global.h"
+#include"ticker.h"
 #include <iostream>
 
 /*
@@ -145,7 +146,7 @@ bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient)
 	}
 
 	uint64 pingSentTimestamp = ((uint64) tsLow) | (((uint64) tsHigh) << 32);
-	uint64 now = GetTickCount64();
+	uint64 now = getTimeMilliseconds();
 	uint64 roundtrip = now - pingSentTimestamp;
 
 //	std::cout << "Reply from server time=" << roundtrip << "ms" << std::endl;

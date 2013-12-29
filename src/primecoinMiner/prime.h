@@ -50,7 +50,9 @@ static const mpz_class mpzPrimeMin = (mpzOne << 255);
 
 extern unsigned int nTargetInitialLength;
 extern unsigned int nTargetMinLength;
+#ifdef _WIN32
 extern DWORD * threadHearthBeat;
+#endif
 
 // Generate small prime table
 void GeneratePrimeTable(unsigned int nSieveSize);

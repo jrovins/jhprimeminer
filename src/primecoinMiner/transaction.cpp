@@ -1,4 +1,5 @@
 #include"global.h"
+#include <iostream>
 
 void bitclient_addVarIntFromStream(stream_t* msgStream, uint64 varInt)
 {
@@ -30,7 +31,7 @@ void bitclient_addVarIntFromStream(stream_t* msgStream, uint64 varInt)
 bitclientTransaction_t* bitclient_createTransaction()
 {
 	bitclientTransaction_t* tx = (bitclientTransaction_t*)malloc(sizeof(bitclientTransaction_t));
-	RtlZeroMemory(tx, sizeof(bitclientTransaction_t));
+	memset(tx, 0, sizeof(bitclientTransaction_t));
 	// init lists
 	tx->tx_in = simpleList_create(1);
 	tx->tx_out = simpleList_create(1);
@@ -79,7 +80,7 @@ void bitclient_writeTransactionToStream(stream_t* dataStream, bitclientTransacti
 bitclientVIn_t* bitclient_addTransactionInput(bitclientTransaction_t* tx)
 {
 	bitclientVIn_t* vin = (bitclientVIn_t*)malloc(sizeof(bitclientVIn_t)+2*1024);
-	RtlZeroMemory(vin, sizeof(bitclientVIn_t)+2*1024);
+	memset(vin, 0, sizeof(bitclientVIn_t)+2*1024);
 	vin->scriptSignatureData = (uint8*)(vin+1);
 	simpleList_add(tx->tx_in, vin);
 	return vin;
@@ -88,7 +89,7 @@ bitclientVIn_t* bitclient_addTransactionInput(bitclientTransaction_t* tx)
 bitclientVOut_t* bitclient_addTransactionOutput(bitclientTransaction_t* tx)
 {
 	bitclientVOut_t* vout = (bitclientVOut_t*)malloc(sizeof(bitclientVOut_t)+2*1024);
-	RtlZeroMemory(vout, sizeof(bitclientVOut_t)+2*1024);
+	memset(vout, 0, sizeof(bitclientVOut_t)+2*1024);
 	vout->scriptPkData = (uint8*)(vout+1);
 	simpleList_add(tx->tx_out,vout);
 	return vout;
@@ -192,7 +193,7 @@ bitclientTransaction_t* bitclient_createCoinbaseTransactionFromSeed(uint32 seed,
 	bitclientTransaction_t* tx = bitclient_createTransaction();
 	// add coinbase input
 	bitclientVIn_t* vInput = bitclient_addTransactionInput(tx);
-	RtlZeroMemory(vInput->previous_output.hash, 32);
+	memset(vInput->previous_output.hash, 0, 32);
 	vInput->previous_output.index = -1;
 	vInput->sequence = -1;
 	bitclient_addScriptU32(vInput, blockHeight, true);
@@ -242,7 +243,7 @@ void bitclient_calculateMerkleRoot(uint8* txHashes, uint32 numberOfTxHashes, uin
 	if(numberOfTxHashes <= 0 )
 	{
 		printf("bitclient_calculateMerkleRoot: Block has zero transactions (not even coinbase)\n");
-		RtlZeroMemory(merkleRoot, 32);
+		memset(merkleRoot, 0, 32);
 		return;
 	}
 	else if( numberOfTxHashes == 1 )

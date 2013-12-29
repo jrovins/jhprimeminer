@@ -8,7 +8,7 @@ stream_t *stream_create(streamSettings_t *settings, void *object)
 	stream->bitIndex = 0;
 	stream->bitReadIndex = 0;
 	stream->bitReadBufferState = 0;
-	if( stream->settings->initStream )
+	if( stream->settings->initStream != NULL )
 		stream->settings->initStream(object, stream);
 	return stream;
 }
@@ -364,7 +364,7 @@ uint32 __fastcall streamEx_dynamicMemoryRange_readData(void *object, void *buffe
 {
 	streamEx_dynamicMemoryRange_t* memoryRangeObj = (streamEx_dynamicMemoryRange_t*)object;
 	uint32 bytesToRead = std::min(len, memoryRangeObj->bufferSize - memoryRangeObj->bufferPosition);
-	RtlCopyMemory(buffer, memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bytesToRead);
+	memcpy(buffer, memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bytesToRead);
 	memoryRangeObj->bufferPosition += bytesToRead;
 	return bytesToRead;
 }
@@ -381,7 +381,7 @@ uint32 __fastcall streamEx_dynamicMemoryRange_writeData(void *object, void *buff
 	if( overwriteSize )
 	{
 		bytesToWrite = std::min(overwriteSize, len);
-		RtlCopyMemory(memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bBuffer, bytesToWrite);
+		memcpy(memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bBuffer, bytesToWrite);
 		memoryRangeObj->bufferPosition += bytesToWrite;
 		nLen -= bytesToWrite;
 		bBuffer += bytesToWrite;
@@ -412,7 +412,7 @@ uint32 __fastcall streamEx_dynamicMemoryRange_writeData(void *object, void *buff
 			if( newBuffer ) // check if we could allocate the memory
 			{
 				// copy old buffer and free it
-				RtlCopyMemory(newBuffer, memoryRangeObj->buffer, memoryRangeObj->bufferSize);
+				memcpy(newBuffer, memoryRangeObj->buffer, memoryRangeObj->bufferSize);
 				free(memoryRangeObj->buffer);
 				memoryRangeObj->buffer = newBuffer;
 				// set new limit
@@ -425,7 +425,7 @@ uint32 __fastcall streamEx_dynamicMemoryRange_writeData(void *object, void *buff
 	bytesToWrite = std::min(bufferBytesLeft, nLen);
 	if( bytesToWrite )
 	{
-		RtlCopyMemory(memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bBuffer, bytesToWrite);
+		memcpy(memoryRangeObj->buffer + memoryRangeObj->bufferPosition, bBuffer, bytesToWrite);
 		memoryRangeObj->bufferPosition += bytesToWrite;
 		memoryRangeObj->bufferSize += bytesToWrite;
 		nLen -= bytesToWrite;
@@ -496,11 +496,11 @@ streamSettings_t streamEx_dynamicMemoryRange_settings =
 stream_t* streamEx_fromMemoryRange(void *mem, uint32 memoryLimit)
 {
 	stream_t *stream = (stream_t*)malloc(sizeof(stream_t));
-	RtlZeroMemory(stream, sizeof(stream_t));
+	memset(stream, 0, sizeof(stream_t));
 	stream->settings = &streamEx_dynamicMemoryRange_settings;
 	// init object
 	streamEx_dynamicMemoryRange_t* memoryRangeObj = (streamEx_dynamicMemoryRange_t*)malloc(sizeof(streamEx_dynamicMemoryRange_t));
-	RtlZeroMemory(memoryRangeObj, sizeof(streamEx_dynamicMemoryRange_t));
+	memset(memoryRangeObj, 0, sizeof(streamEx_dynamicMemoryRange_t));
 	stream->object = memoryRangeObj;
 	// init object
 	memoryRangeObj->bufferSize = memoryLimit;
@@ -522,11 +522,11 @@ stream_t* streamEx_fromMemoryRange(void *mem, uint32 memoryLimit)
 stream_t* streamEx_fromDynamicMemoryRange(uint32 memoryLimit)
 {
 	stream_t *stream = (stream_t*)malloc(sizeof(stream_t));
-	RtlZeroMemory(stream, sizeof(stream_t));
+	memset(stream, 0, sizeof(stream_t));
 	stream->settings = &streamEx_dynamicMemoryRange_settings;
 	// init object
 	streamEx_dynamicMemoryRange_t* memoryRangeObj = (streamEx_dynamicMemoryRange_t*)malloc(sizeof(streamEx_dynamicMemoryRange_t));
-	RtlZeroMemory(memoryRangeObj, sizeof(streamEx_dynamicMemoryRange_t));
+	memset(memoryRangeObj, 0, sizeof(streamEx_dynamicMemoryRange_t));
 	stream->object = memoryRangeObj;
 	// alloc 1KB and setup memoryRangeObj
 	memoryRangeObj->sizeLimit = memoryLimit;
@@ -590,7 +590,7 @@ uint32 __fastcall streamEx_substream_readData(void *object, void *buffer, uint32
 
 uint32 __fastcall streamEx_substream_writeData(void *object, void *buffer, uint32 len)
 {	
-	#ifdef _WIN32
+#ifdef _WIN32
 		__debugbreak();
 #else
 	    raise(SIGTRAP);
@@ -607,7 +607,7 @@ uint32 __fastcall streamEx_substream_getSize(void *object)
 
 void __fastcall streamEx_substream_setSize(void *object, uint32 size)
 {
-	#ifdef _WIN32
+#ifdef _WIN32
 		__debugbreak();
 #else
 	    raise(SIGTRAP);
@@ -660,11 +660,11 @@ streamSettings_t streamEx_substream_settings =
 stream_t* streamEx_createSubstream(stream_t* mainstream, sint32 startOffset, sint32 size)
 {
 	stream_t *stream = (stream_t*)malloc(sizeof(stream_t));
-	RtlZeroMemory(stream, sizeof(stream_t));
+	memset(stream, 0, sizeof(stream_t));
 	stream->settings = &streamEx_substream_settings;
 	// init object
 	streamEx_substream_t* substream = (streamEx_substream_t*)malloc(sizeof(streamEx_dynamicMemoryRange_t));
-	RtlZeroMemory(substream, sizeof(streamEx_dynamicMemoryRange_t));
+	memset(substream, 0, sizeof(streamEx_dynamicMemoryRange_t));
 	stream->object = substream;
 	// setup substream
 	substream->baseOffset = startOffset;
@@ -686,7 +686,7 @@ void* streamEx_map(stream_t* stream, sint32* size)
 	sint32 rSize = stream_getSize(stream);
 	*size = rSize;
 	if( rSize == 0 )
-		return ""; // return any valid memory address 
+		return (void *)""; // return any valid memory address 
 	void* mem = malloc(rSize);
 	stream_readData(stream, (void*)mem, rSize);
 	return mem;

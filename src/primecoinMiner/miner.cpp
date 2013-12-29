@@ -10,6 +10,7 @@ std::set<mpz_class> multiplierSet;
 
 bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, const sint32 threadIndex, const unsigned int nonceStep)
 {
+	//JLR DBG
 	//printf("PrimecoinMiner started\n");
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
 	//RenameThread("primecoin-miner");
@@ -88,10 +89,12 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
             phash = primecoinBlock->blockHeaderHash;
             mpz_set_uint256(mpzHash.get_mpz_t(), phash);
 		}
+		//JLR DBG
 		//printf("Use nonce %d\n", primecoinBlock->nonce);
 		if (primecoinBlock->nonce >= MAX_NONCE)
 		{
-			//printf("Nonce overflow\n");
+			//JLR DBG
+			printf("Nonce overflow\n");
 			break;
 		}
 		// Primecoin: primorial fixed multiplier
@@ -125,11 +128,14 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
         } else {
             mpzFixedMultiplier = 1;
         }		
-		//printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
+	//JLR DBG
+	//printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
 		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
-		threadHearthBeat[threadIndex] = GetTickCount();
+#ifdef _WIN32
+		threadHearthBeat[threadIndex] = getTimeMilliseconds();
+#endif
 		if (appQuitSignal)
 		{
 			printf( "Shutting down mining thread %d.\n", threadIndex);

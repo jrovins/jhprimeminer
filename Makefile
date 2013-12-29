@@ -1,5 +1,6 @@
 CXX = g++
-CFLAGS = -mtune=native -Wall -Wextra -std=c++0x -O3 -fomit-frame-pointer
+#CFLAGS = -mtune=native -Wall -Wextra -std=c++0x -O3 -fomit-frame-pointer
+CFLAGS = -mtune=native -Wall -Wextra -std=c++0x -O3  -ggdb
 
 OSVERSION := $(shell uname -s)
 LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread
@@ -26,6 +27,7 @@ JHLIB = src/primecoinMiner/jhlib/customBuffer.o \
 	src/primecoinMiner/jhlib/fastString.o \
 	src/primecoinMiner/jhlib/hashTable_uint32.o \
 	src/primecoinMiner/jhlib/simpleList.o \
+	src/primecoinMiner/jhlib/streamWrapper.o \
 	src/primecoinMiner/jhlib/simpleHTTP.o
 
 OBJS = \
@@ -46,6 +48,7 @@ OBJS = \
 	src/primecoinMiner/xptClientPacketHandler.o \
 	src/primecoinMiner/xptPacketbuffer.o \
 	src/primecoinMiner/xptServer.o \
+	src/primecoinMiner/transaction.o \
 	src/primecoinMiner/xptServerPacketHandler.o
 
 all: jhprimeminer
