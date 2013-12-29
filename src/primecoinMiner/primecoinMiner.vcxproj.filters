@@ -138,10 +138,7 @@
     <ClCompile Include="prime.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ticker.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="stats.cpp">
+    <ClCompile Include="transaction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -449,10 +446,7 @@
     <ClInclude Include="prime.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ticker.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="stats.h">
+    <ClInclude Include="transaction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,4 +1,5 @@
 #include"global.h"
+#include <iostream>
 
 /*
  * Called when a packet with the opcode XPT_OPC_S_AUTH_ACK is received
@@ -121,5 +122,32 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 			if( rejectReason[0] != '\0' )
 				std::cout << "Reason: " << rejectReason << std::endl;
 	}
+	return true;
+}
+
+/*
+ * Called when a packet with the opcode XPT_OPC_S_PING is received
+ */
+bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient)
+{
+	// parse block data
+	bool recvError = false;
+	xptPacketbuffer_beginReadPacket(xptClient->recvBuffer);
+	xptClient->workDataValid = false;
+	// add general block info
+	uint32 version = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);			// version
+	uint32 tsLow = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);				// lower 32 bits of timestamp
+	uint32 tsHigh = xptPacketbuffer_readU32(xptClient->recvBuffer, &recvError);				// upper 32 bits of timestamp
+	if( recvError )
+	{
+			std::cout << "xptClient_processPacket_client2ServerPing(): Parse error" << std::endl;
+		return false;
+	}
+
+	uint64 pingSentTimestamp = ((uint64) tsLow) | (((uint64) tsHigh) << 32);
+	uint64 now = GetTickCount64();
+	uint64 roundtrip = now - pingSentTimestamp;
+
+//	std::cout << "Reply from server time=" << roundtrip << "ms" << std::endl;
 	return true;
 }

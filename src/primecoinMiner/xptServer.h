@@ -85,6 +85,10 @@ typedef struct
 #define XPT_OPC_C_SUBMIT_SHARE	4
 #define XPT_OPC_S_SHARE_ACK		5
 
+#define XPT_OPC_C_PING			8
+#define XPT_OPC_S_PING			8
+
+
 // list of error codes
 
 #define XPT_ERROR_NONE				(0)

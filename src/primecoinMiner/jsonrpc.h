@@ -127,6 +127,7 @@ jsonObject_t* jsonObject_getArrayElement(jsonObject_t* jsonObject, uint32 index)
 bool jsonObject_isTrue(jsonObject_t* jsonObject);
 double jsonObject_getNumberValueAsDouble(jsonObject_t* jsonObject);
 sint32 jsonObject_getNumberValueAsS32(jsonObject_t* jsonObject);
+uint32 jsonObject_getNumberValueAsU32(jsonObject_t* jsonObject);
 
 // object deallocation
 void jsonObject_freeStringData(uint8* stringBuffer);

@@ -8,7 +8,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
 
 std::set<mpz_class> multiplierSet;
 
-void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, sint32 threadIndex)
+bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psieve, const sint32 threadIndex, const unsigned int nonceStep)
 {
 	//printf("PrimecoinMiner started\n");
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -19,6 +19,7 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 	//CReserveKey reservekey(pwallet);
 //	unsigned int nExtraNonce = 0;  unused?
 
+   static const unsigned int MAX_NONCE = 0xFFFF0000; // From Primecoind sources.
 	static const unsigned int nPrimorialHashFactor = 7;
 //	const unsigned int nPrimorialMultiplierStart = 61;   unused?
 //	const unsigned int nPrimorialMultiplierMax = 79;  unused?
@@ -30,11 +31,8 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 //	uint64_t nSieveGenTime = 0;   unused?
 	
 
-	//primecoinBlock->nonce = 0;
-	//TODO: check this if it makes sense
-	primecoinBlock->nonce = 0x01000000 * threadIndex;
-   const unsigned long maxNonce = (0x01000000 * threadIndex) | 0x00FF0000;
-	//primecoinBlock->nonce = 0;
+	// Generate a thread specific nonce.
+	primecoinBlock->nonce = threadIndex;
 
 	uint64 nTime = getTimeMilliseconds() + 1000*600;
 //	uint64 nStatTime = getTimeMilliseconds() + 2000;  unused?
@@ -66,12 +64,11 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 			if( newTimestamp != primecoinBlock->timestamp )
 			{
 				primecoinBlock->timestamp = newTimestamp;
-         	primecoinBlock->nonce = 0x01000000 * threadIndex;
-		//		primecoinBlock->nonce = 0;
+				primecoinBlock->nonce = threadIndex;
 				//nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
-		//		nPrimorialMultiplier = nPrimorialMultiplierStart;
+		      //nPrimorialMultiplier = nPrimorialMultiplierStart;
 			}
-         nLastRollTime = nCurrentTick;
+			nLastRollTime = nCurrentTick;
 		}
 
 		primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
@@ -85,16 +82,16 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
         mpz_class mpzHash;
         mpz_set_uint256(mpzHash.get_mpz_t(), phash);
         
-		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < maxNonce) {
-			primecoinBlock->nonce++;
+		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < MAX_NONCE) {
+			primecoinBlock->nonce += nonceStep;
 			primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
             phash = primecoinBlock->blockHeaderHash;
             mpz_set_uint256(mpzHash.get_mpz_t(), phash);
 		}
 		//printf("Use nonce %d\n", primecoinBlock->nonce);
-		if (primecoinBlock->nonce >= maxNonce)
+		if (primecoinBlock->nonce >= MAX_NONCE)
 		{
-			printf("Nonce overflow\n");
+			//printf("Nonce overflow\n");
 			break;
 		}
 		// Primecoin: primorial fixed multiplier
@@ -132,7 +129,12 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 		// Primecoin: mine for prime chain
 		unsigned int nProbableChainLength;
 		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nTriedMultiplier, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
-
+		threadHearthBeat[threadIndex] = GetTickCount();
+		if (appQuitSignal)
+		{
+			printf( "Shutting down mining thread %d.\n", threadIndex);
+			return false;
+		}
 		//{
 		//	// do nothing here, share is already submitted in MineProbablePrimeChain()
 		//	//primecoinBlock->nonce += 0x00010000;
@@ -150,9 +152,10 @@ void BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 		//}
 
 
-		primecoinBlock->nonce ++;
+		primecoinBlock->nonce += nonceStep;
 		//primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
 		loopCount++;
 	}
 	
+	return true;
 }

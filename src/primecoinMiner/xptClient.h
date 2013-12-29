@@ -36,6 +36,8 @@ typedef struct
 	// disconnect info
 	bool disconnected;
 	char* disconnectReason;
+	// periodic ping/heartbeat info
+	uint64 lastClient2ServerInteractionTimestamp;
 	// work data
 	uint32 workDataCounter; // timestamp of when received the last block of work data
 	bool workDataValid;
@@ -66,4 +68,5 @@ void xptClient_sendWorkerLogin(xptClient_t* xptClient);
 bool xptClient_processPacket_authResponse(xptClient_t* xptClient);
 bool xptClient_processPacket_blockData1(xptClient_t* xptClient);
 bool xptClient_processPacket_shareAck(xptClient_t* xptClient);
+bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient);
 

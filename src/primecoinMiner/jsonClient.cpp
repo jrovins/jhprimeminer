@@ -5,13 +5,18 @@
 #ifdef _WIN32
 SOCKET jsonClient_openConnection(char *IP, int Port)
 {
-	SOCKET s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+	SOCKET s = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
 	SOCKADDR_IN addr;
 	memset(&addr,0,sizeof(SOCKADDR_IN));
 	addr.sin_family=AF_INET;
 	addr.sin_port=htons(Port);
 	addr.sin_addr.s_addr=inet_addr(IP);
 	int result = connect(s,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN));
+	if( result )
+	{
+		closesocket(s);
+		return SOCKET_ERROR;
+	}
 #else
 int jsonClient_openConnection(char *IP, int Port)
 {
@@ -25,6 +30,7 @@ int jsonClient_openConnection(char *IP, int Port)
 #endif
 	if( result )
 	{
+		close(s);
 		return 0;
 	}
 	return s;
@@ -246,7 +252,14 @@ jsonObject_t* jsonClient_request(jsonRequestTarget_t* server, char* methodName, 
 		{
 			// client closed connection
 			// this can also happen when we have received all data
+#ifdef _WIN32
+			closesocket(serverSocket);
+#else
+	      close(serverSocket);
+#endif
 			serverSocket = 0; // set socket to zero so we know the connection is already closed
+
+
 			break;
 		}
 		else
