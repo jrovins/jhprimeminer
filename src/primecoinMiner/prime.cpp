@@ -957,17 +957,13 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       if( nProbableChainLength >= 0x06000000 )
       {
          shareDifficultyMajor = (sint32)(nChainLength>>24);
-printf("\n==========================================\n");
-printf("%x %d %x\n", nProbableChainLength, shareDifficultyMajor, block->serverData.nBitsForShare);
-printf("==========================================\n");
+//JLR
+//printf("\n==========================================\n");
+//printf("%x %d %x\n", nProbableChainLength, shareDifficultyMajor, block->serverData.nBitsForShare);
+//printf("==========================================\n");
       }
       else
       {
-//JLR
-      if( nProbableChainLength >= 0x5500000 )
-printf("%x ", nProbableChainLength);
-//      else
-//printf(".");
          continue;
       }
 
@@ -978,7 +974,7 @@ printf("%x ", nProbableChainLength);
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
 //JLR
-printf("Good  \n");
+//printf("Good  \n");
          // Update Stats
          primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
          primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
@@ -1004,12 +1000,12 @@ printf("Good  \n");
             if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             {
 //JLR
-printf("Cont B  \n");
+//printf("Cont B  \n");
                continue;
             }
 
 //JLR
-printf("At: C\n");
+//printf("At: C\n");
             // update server data
             block->serverData.client_shareBits = nProbableChainLength;
             // generate block raw data
