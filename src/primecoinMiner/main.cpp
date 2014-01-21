@@ -287,8 +287,6 @@ workData_t workData;
 int lastBlockCount = 0;
 
 jsonRequestTarget_t jsonRequestTarget; // rpc login data
-//jsonRequestTarget_t jsonRequestTarget = {0}; // rpc login data
-//jsonRequestTarget_t jsonLocalPrimeCoin; // rpc login data
 bool useLocalPrimecoindForLongpoll;
 
 /*
@@ -514,7 +512,10 @@ static bool IsXptClientConnected()
 	__try
 	{
 #endif
-		if (workData.xptClient == NULL || workData.xptClient->disconnected)
+                // Kluge for get block template mode ...
+                if (workData.protocolMode == MINER_PROTOCOL_GBT)
+			return true;
+		else if (workData.xptClient == NULL || workData.xptClient->disconnected)
 			return false;
 #ifdef _WIN32
 	}
@@ -652,9 +653,9 @@ void jhMiner_queryWork_primecoin_getblocktemplate()
 void jhMiner_queryWork_primecoin_getwork()
 {
    sint32 rpcErrorCode = 0;
-   uint32 time1 = getTimeMilliseconds();
+   uint64 time1 = getTimeMilliseconds();
    jsonObject_t* jsonReturnValue = jsonClient_request(&jsonRequestTarget, "getwork", NULL, &rpcErrorCode);
-   uint32 time2 = getTimeMilliseconds() - time1;
+   uint64 time2 = getTimeMilliseconds() - time1;
    // printf("request time: %dms\n", time2);
    if( jsonReturnValue == NULL )
    {
@@ -1018,7 +1019,7 @@ uint32_t threadIndex = static_cast<uint32_t>((uintptr_t)arg);
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
       //JLR DBG
-      uint32 time1 = getTimeMilliseconds();
+      uint64 time1 = getTimeMilliseconds();
       if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
       {
 //JLR
@@ -1251,17 +1252,26 @@ void jhMiner_parseCommandline(int argc, char **argv)
 		else if( memcmp(argument, "-tune", 6)==0 )
 		{
          // -tune
+//JLR DEBUG
+printf("Procesing tune parm\n");
 			if( cIdx >= argc )
 			{
             cout << "Missing flag after -tune option" << endl;
 				exit(0);
 			}
-			if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
+			if (memcmp(argv[cIdx], "true", 5) == 0 ||  memcmp(argv[cIdx], "1", 2) == 0)
+                        {
 				commandlineInput.enableCacheTunning = true;
+printf("Set tune parm\n");
+                        }
+                        else
+                        {
+printf("No Set tune parm arg: %s \n", argv[cIdx]);
+                        }
 
 			cIdx++;
 		}
-      else if( memcmp(argument, "-target", 8)==0 )
+      else if( memcmp(argument, "-target", 7)==0 )
       {
          // -target
          if( cIdx >= argc )
@@ -1277,7 +1287,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
-      else if( memcmp(argument, "-bttarget", 10)==0 )
+      else if( memcmp(argument, "-bttarget", 9)==0 )
       {
          // -bttarget
          if( cIdx >= argc )
@@ -1381,16 +1391,30 @@ bool fIncrementPrimorial = true;
 unsigned int nRoundSievePercentage;
 bool bOptimalL1SearchInProgress = false;
 
+
+
+//JLR Try enableing for unix
 #ifdef _WIN32
-static void CacheAutoTuningWorkerThread(bool bEnabled)
-{
+static void CacheAutoTuningWorkerThread(bool bEnabled){
+#else
+void * CacheAutoTuningWorkerThread(void *arg){
+bool bEnabled = static_cast<bool>((uintptr_t)arg);
+#endif
 
    if (bOptimalL1SearchInProgress || !bEnabled)
+   {
+#ifdef _WIN32
       return;
+#else
+printf("CacheAutoTuningWorkerThread() Exit! SIP:%d bE:%d\n", bOptimalL1SearchInProgress, bEnabled);
+      pthread_exit(NULL);
+#endif
+   }
 
    bOptimalL1SearchInProgress = true;
 
-   DWORD startTime = GetTickCount();	
+   //DWORD startTime = GetTickCount();	
+   uint64 tartTime= getTimeMilliseconds();
    unsigned int nL1CacheElementsStart = 64000;
    unsigned int nL1CacheElementsMax   = 2560000;
    unsigned int nL1CacheElementsIncrement = 64000;
@@ -1449,25 +1473,37 @@ static void CacheAutoTuningWorkerThread(bool bEnabled)
 
    }
 }
-#endif
+//JLR nable for unix
 
 bool bEnablenPrimorialMultiplierTuning = true;
 
+//JLR enable for unix
 #ifdef _WIN32
-static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
-{
+static void RoundSieveAutoTuningWorkerThread(bool bEnabled) {
+#else
+void * RoundSieveAutoTuningWorkerThread(void *arg){
+bool bEnabled = static_cast<bool>((uintptr_t)arg);
+#endif
+
+#ifdef _WIN32
    __try
    {
-
-
+#endif
       // Auto Tuning for nPrimorialMultiplier
+      int nTunedCnt = 0;
+      unsigned int Previous_primordal = 0;
       int nSampleSeconds = 15;
+      unsigned int nL1CacheElements = primeStats.nL1CacheElements;
+      bool bPrint = true;
 
       while (true)
       {
          if (bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning || !IsXptClientConnected())
          {
-            Sleep(10);
+            //JLR DEBUG 
+            //printf("RoundSieveAutoTuningWorkerThread() Sleep: SIP:%d EnTu:%d XCC:%d\n",
+            //bOptimalL1SearchInProgress, bEnablenPrimorialMultiplierTuning, IsXptClientConnected());
+            Sleep(3000);
             continue;
          }
          primeStats.nWaveTime = 0;
@@ -1477,26 +1513,67 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
          Sleep(nSampleSeconds*1000);
 
          if (appQuitSignal)
+#ifdef _WIN32
             return;
+#else
+            pthread_exit(NULL);
+#endif
 
+         // JLR: Why is this second check here, is the one above not sufficent?
          if (bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning || !IsXptClientConnected())
+         {
+            printf("RoundSieveAutoTuningWorkerThread() Top-Skip: SIP:%d EnTu:%d XCC:%d\n",
+            bOptimalL1SearchInProgress, bEnablenPrimorialMultiplierTuning, IsXptClientConnected);
             continue;
+         }
+         
+         
+         // Once the value stops changing, we want to stop tuning.
+         if(Previous_primordal ==  primeStats.nPrimorialMultiplier)
+         {
+            if (++nTunedCnt == 3)
+            {
+               bPrint = false;
+               printf("Round Sieve Auto Tuning has stabilized, Going Silent.\n");
+            }
+            if (nTunedCnt == 10)
+            {
+               printf("Round Sieve Auto Tuning complete: Exit tuning thread. \n");
+#ifdef _WIN32
+               return;
+#else
+               pthread_exit(NULL);
+#endif
+            }
+         }
+         else
+         {
+             nTunedCnt = 0;
+             bPrint = true;
+         }
 
          float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
          //JLR DBG
-         printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-         printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
+         if (bPrint)
+         {
+            printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+            printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
          	primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
          	primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
-         printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
-         printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+            printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
+            printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
          //JLR DBG END
+         }
 
-         if (ratio == 0) continue; // No weaves occurred, don't change anything.
+         if (ratio == 0) 
+         {
+            Previous_primordal = primeStats.nPrimorialMultiplier;
+            continue; // No weaves occurred, don't change anything.
+         }
 
          if (ratio > nRoundSievePercentage + 5)
          {
-            if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
+            if (!PrimeTableGetNextPrime((unsigned int &)  primeStats.nPrimorialMultiplier))
                error("PrimecoinMiner() : primorial increment overflow");
             printf( "Sieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
          }
@@ -1504,20 +1581,21 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
          {
             if ( primeStats.nPrimorialMultiplier > 2)
             {
-               if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
+               if (!PrimeTableGetPreviousPrime((unsigned int &) primeStats.nPrimorialMultiplier))
                   error("PrimecoinMiner() : primorial decrement overflow");
                printf( "Sieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
             }
          }
+         Previous_primordal = primeStats.nPrimorialMultiplier;
       }
+#ifdef _WIN32
    }
    __except(EXCEPTION_EXECUTE_HANDLER)
    {
    }
-
-}
 #endif
 
+}
 
 void PrintCurrentSettings()
 {
@@ -1577,7 +1655,6 @@ static struct termios oldt, newt;
 
 
 	while (true) {
-
 		int input = getchar();
 		switch (input) {
 		case 'q': case 'Q': case 3: //case 27:
@@ -1618,6 +1695,14 @@ static struct termios oldt, newt;
          bEnablenPrimorialMultiplierTuning = !bEnablenPrimorialMultiplierTuning;
          std::cout << "Primorial Multiplier Auto Tuning was " << (bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled") << std::endl;
          break;
+
+      //case 'c': case 'C':
+      //   if (!bOptimalL1SearchInProgress)
+      //   {
+      //      CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)true, 0, 0);
+      //      puts("Auto tunning for L1CacheElements size was started");
+      //   }
+      //   break;
 		case 's': case 'S':			
 			PrintCurrentSettings();
 			break;
@@ -1671,7 +1756,7 @@ static struct termios oldt, newt;
 				break;
 			}
 		}
-	}
+	  }
 	}
 #ifdef _WIN32
 	return;
@@ -1710,8 +1795,8 @@ static void *watchdog_thread(void *)
          }
 
 #ifdef _WIN32
-
          DWORD currentTick = GetTickCount();
+         uint64 currentTick = getTimeMilliseconds();
          for (int i = 0; i < threadMap.size(); i++)
          {
             DWORD heartBeatTick = threadHearthBeat[i];
@@ -1730,7 +1815,7 @@ static void *watchdog_thread(void *)
                   Sleep(1000);
                   CloseHandle(h);
                   Sleep(1000);
-                  threadHearthBeat[i] = GetTickCount();
+                  threadHearthBeat[i] = getTimeMilliseconds();
                   threadMap.erase(thMap_Iter);
                   h = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)jhMiner_workerThread_xpt, (LPVOID)i, 0, 0);
                   SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL);
@@ -1840,7 +1925,7 @@ int jhMiner_main_gbtMode()
          primeStats.nSieveRounds = 0;
       }		
       // wait and check some stats
-      uint32 time_updateWork = getTimeMilliseconds();
+      uint64 time_updateWork = getTimeMilliseconds();
       while( true )
       {
          if (appQuitSignal)
@@ -1893,7 +1978,7 @@ int jhMiner_main_getworkMode()
       {
          if (appQuitSignal)
             return 0;
-         uint32 passedTime = getTimeMilliseconds() - time_updateWork;
+         uint64 passedTime = getTimeMilliseconds() - time_updateWork;
          if( passedTime >= 4000 )
             break;
 
@@ -2018,6 +2103,8 @@ int main(int argc, char **argv)
    commandlineInput.sieveSize = 1024000; // default maxSieveSize
    commandlineInput.sievePercentage = 10; // default 
    commandlineInput.roundSievePercentage = 70; // default 
+//JLR DEBUG
+//commandlineInput.enableCacheTunning = true;
    commandlineInput.enableCacheTunning = false;
    commandlineInput.L1CacheElements = 256000;
    commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
@@ -2284,17 +2371,20 @@ int main(int argc, char **argv)
 
       SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
       threadMap.insert(thMapKeyVal(threadIdx,hThread));
-      threadHearthBeat[threadIdx] = GetTickCount();
+      threadHearthBeat[threadIdx] = getTimeMilliseconds();
    }
 
 #else
 	uint32_t totalThreads = commandlineInput.numThreads;
-			totalThreads = commandlineInput.numThreads + 1;
+// Add three more for input thre, & 2 tuning threads
+			totalThreads = commandlineInput.numThreads + 3;
 
   pthread_t threads[totalThreads];
   // start the Auto Tuning thread
   
-  pthread_create(&threads[commandlineInput.numThreads], NULL, input_thread, NULL);
+  pthread_create(&threads[commandlineInput.numThreads + 2], NULL, RoundSieveAutoTuningWorkerThread, (void *) true);
+  pthread_create(&threads[commandlineInput.numThreads + 1], NULL, CacheAutoTuningWorkerThread, (void *)commandlineInput.enableCacheTunning);
+  pthread_create(&threads[commandlineInput.numThreads], NULL, input_thread, NULL);   
 	pthread_attr_t threadAttr;
   pthread_attr_init(&threadAttr);
   // Set the stack size of the thread
