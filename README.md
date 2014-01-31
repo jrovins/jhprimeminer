@@ -39,7 +39,7 @@ yum groupinstall "Development Tools"
 
 yum install openssl openssl-devel openssh-clients gmp gmp-devel gmp-static git
 
-git clone https://github.com/tandyuk/jhPrimeminer.git
+git clone https://github.com/jrovins/jhPrimeminer.git
 
 cd jhPrimeminer
 
