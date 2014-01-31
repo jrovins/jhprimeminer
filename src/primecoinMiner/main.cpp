@@ -837,8 +837,6 @@ uint32_t threadIndex = static_cast<uint32_t>((uintptr_t)arg);
       // copy block data from global workData
       uint32 workDataHash = 0;
       uint8 serverData[32];
-//JLR DEBUG
-//printf ("jhMiner_workerThread_getwork() TOP!\n");
       while( workData.workEntry[0].dataIsValid == false ) Sleep(200);
 #ifdef _WIN32
       EnterCriticalSection(&workData.cs);
@@ -1870,7 +1868,7 @@ void OnNewBlock(double nBitsShare, double nBits, unsigned long blockHeight)
 
 void PrintStat()
 {
-   if( workData.workEntry[0].dataIsValid )
+   if( workData.workEntry[0].dataIsValid || getBlockTemplateData.isValidData )
    {
       double totalRunTime = (double)(getTimeMilliseconds() - primeStats.startTime);
       double statsPassedTime = (double)(getTimeMilliseconds() - primeStats.primeLastUpdate);
