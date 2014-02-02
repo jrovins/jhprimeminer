@@ -10,6 +10,8 @@
 
 #include <algorithm>
 
+extern bool bPrivatePool;
+
 // Prime Table
 //std::vector<unsigned int> vPrimes;
 //uint32* vPrimes;
@@ -21,6 +23,7 @@ __declspec( thread ) BN_CTX* pctx = NULL;
 #else
   BN_CTX* pctx = NULL;
 #endif
+
 
 /* not used and gives errors because of LARGE_INTEGER, so disable for now
 // changed to return the ticks since reboot
@@ -867,8 +870,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //}
    fNewBlock = false;
    unsigned int lSieveTarget, lSieveBTTarget;
-//JLR
-//printf("MineProbablePrimeChain() Top\n");
+#ifdef TRACE_3
+   printf("TRACE: MineProbablePrimeChain() Top\n");
+#endif
    if (nOverrideTargetValue > 0)
       lSieveTarget = nOverrideTargetValue;
    else
@@ -891,9 +895,10 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //int64 nStart, nCurrent; // microsecond timer
    if (psieve == NULL)
    {
-//JLR
-//printf("MineProbablePrimeChain() Build sieve\n");
       // Build sieve
+#ifdef TRACE_2
+      printf("MineProbablePrimeChain() Build sieve\n");
+#endif
       psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
       psieve->Weave();
    }
@@ -940,8 +945,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          // power tests completed for the sieve
          fNewBlock = true; // notify caller to change nonce
          rtnValue = false;
-//JLR
-//printf("v ");
+#ifdef TRACE_2
+         printf("Power tests completed for the sieve");
+#endif
          break;
       }
 
@@ -957,10 +963,19 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       if( nProbableChainLength >= 0x06000000 )
       {
          shareDifficultyMajor = (sint32)(nChainLength>>24);
-//JLR
-//printf("\n==========================================\n");
-//printf("%x %d %x\n", nProbableChainLength, shareDifficultyMajor, block->serverData.nBitsForShare);
-//printf("==========================================\n");
+#ifdef TRACE_2
+         printf("\n==========================================\n");
+         printf("%x %d %x\n", nProbableChainLength, shareDifficultyMajor, block->serverData.nBitsForShare);
+         printf("==========================================\n");
+#endif
+         // Count these for here, if we are mining a private pool
+         // it is better to see all the chains the miner is finding
+         // so it can be better tuned.
+         if( bPrivatePool == true )
+         {
+            primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
+            primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
+         }
       }
       else
       {
@@ -973,11 +988,16 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
 
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
-//JLR
-//printf("Good  \n");
+#ifdef TRACE_2
+         printf("Good Chain! \n");
+#endif
          // Update Stats
-         primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
-         primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
+         // when public pool mining, do the stats on what is accepted by the pool
+         if(bPrivatePool == false)
+         {
+            primeStats.chainCounter[0][std::min(shareDifficultyMajor,12)]++;
+            primeStats.chainCounter[nCandidateType][std::min(shareDifficultyMajor,12)]++;
+         }
          primeStats.nChainHit++;
 
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier;
@@ -999,13 +1019,15 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             // attempt to prevent duplicate share submissions.
             if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             {
-//JLR
-//printf("Cont B  \n");
+#ifdef TRACE_2
+               printf("TRACE: Duplicate Share, Continue ...  \n");
+#endif
                continue;
             }
 
-//JLR
-//printf("At: C\n");
+#ifdef TRACE_2
+            printf("TRACE: Submit Share to pool.\n");
+#endif
             // update server data
             block->serverData.client_shareBits = nProbableChainLength;
             // generate block raw data

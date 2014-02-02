@@ -13,9 +13,14 @@ wallet as a server, and multiple linux workers attached for mining.
 This part of it has been tested and works well. (is mining blocks!!!)
 
 However, This merged version needs a lot more polishing,
-I have not had good luck connecting this version to public mining pools,
-so I suggest that you use other versions of jhprimeminer for public pool mining,
-until these issues are fixed. 
+
+This has been tested & working with ypool, needs the following options:
+./jhprimeminer -o http://ypool.net:8080   -u <Username>.<Worker> -p <Password> -xpt
+
+The Stat counters have been modified:
+when private pool mining with the -xpm option, all chains found by the miner will be tallied.
+seeing it this way is more helpful for fine tuning, without this change you will only see whole blocks found.
+when mining on a public pool, all the chains accepted by the server will be tallied, just like it was before.
 
 Right now I consider this an alpha version, so use at your own risk.
 

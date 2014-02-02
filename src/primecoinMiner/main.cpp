@@ -27,6 +27,7 @@ unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 char* dt;
 bool useGetBlockTemplate = true;
+bool bPrivatePool = false;
 uint8 decodedWalletAddress[32];
 int decodedWalletAddressLen;
 
@@ -1134,6 +1135,7 @@ void jhMiner_parseCommandline(int argc, char **argv)
             exit(0);
          }
          commandlineInput.xpmAddress = fStrDup(argv[cIdx], 64);
+         bPrivatePool = true;
          cIdx++;
       }
 		else if( memcmp(argument, "-t", 3)==0 )
@@ -2076,7 +2078,8 @@ int main(int argc, char **argv)
    // print header
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.4beta                   \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by jrovins                                \xBA\n");
+   printf("\xBA     Based on tandyuk's linux port and rdebourbon -v3.4beta    \xBA\n");
    printf("\xBA     merged with hg5fm (mumus) v8.0 build                      \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA  contributors: x3maniac                                       \xBA\n");
