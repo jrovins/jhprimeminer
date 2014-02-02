@@ -1,6 +1,9 @@
 CXX = g++
-#CFLAGS = -march=native -mtune=native -Wall -Wextra -std=c++0x -O3 -fomit-frame-pointer
-CFLAGS = -march=native -mtune=native -Wall -Wextra -std=c++0x -O3  -ggdb -fomit-frame-pointer
+CFLAGS = -march=native -mtune=native -Wall -Wextra -std=c++0x -O3 -fomit-frame-pointer
+# Note: adjust -march=native -mtune=native 
+# if you are building, and running on different machines
+# For Debug:
+#CFLAGS = -march=native -mtune=native -Wall -Wextra -std=c++0x -O2  -ggdb -fomit-frame-pointer
 
 OSVERSION := $(shell uname -s)
 LIBS = -lgmp -lgmpxx -lcrypto -lssl -pthread
